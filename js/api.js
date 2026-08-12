@@ -1,7 +1,7 @@
-/* 数据层：GitHub API + 本地条目，零硬编码
-   - 缓存：sessionStorage + TTL，避免重复请求与 API 限流
+/* 数据层：GitHub API 和本地条目，零硬编码
+   - 缓存：sessionStorage 和 TTL，避免重复请求与 API 限流
    - 降级：任何远端失败返回安全默认值，不阻塞渲染
-   - 组合：两阶段加载 —— 本地条目立即可用，远端数据后补 */
+   - 组合：两阶段加载，本地条目立即可用，远端数据后补 */
 
 window.WikiAPI = (function () {
   "use strict";
@@ -11,7 +11,7 @@ window.WikiAPI = (function () {
   const ENTRIES_URL = "data/entries.json";
   const CACHE_PREFIX = "ow-cache:";
 
-  /* ISO 时间 → 本地时区 YYYY-MM-DD（纯日期字符串原样返回，非法值兜底） */
+  /* ISO 时间转本地时区日期，纯日期原样返回，非法值兜底 */
   function fmtDate(iso) {
     if (!iso) return "";
     if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
@@ -22,7 +22,7 @@ window.WikiAPI = (function () {
     return d.getFullYear() + "-" + m + "-" + day;
   }
 
-  /* 缓存（sessionStorage + TTL） */
+  /* 缓存（sessionStorage 和 TTL） */
 
   function cacheGet(key) {
     try {
@@ -113,7 +113,7 @@ window.WikiAPI = (function () {
               : "https://" + rawHome;
             return {
               id: repo.name,
-              /* pushed_at = 最后 push 代码的时间；updated_at 会被 star/issue 等元数据活动污染 */
+              /* pushed_at 是最后 push 代码的时间，updated_at 会被 star 等元数据活动污染 */
               date: fmtDate(repo.pushed_at),
               category: "项目",
               tags: [repo.language, "github"].filter(Boolean),
