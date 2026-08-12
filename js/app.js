@@ -121,7 +121,7 @@
         (query ? ` · 关键词「${query}」` : "") +
         (activeCategory !== "全部" ? ` · ${activeCategory}` : "")
       : "";
-    footUri.textContent = `${R.uriOf("").replace(/\/entries\/$/, "/entries")}`;
+    footUri.textContent = R.SITE;
   }
 
   /* ---------- 模态 ---------- */
