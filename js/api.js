@@ -11,6 +11,17 @@ window.WikiAPI = (function () {
   const ENTRIES_URL = "data/entries.json";
   const CACHE_PREFIX = "ow-cache:";
 
+  /* ISO 时间 → 本地时区 YYYY-MM-DD（纯日期字符串原样返回，非法值兜底） */
+  function fmtDate(iso) {
+    if (!iso) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso.slice(0, 10);
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return d.getFullYear() + "-" + m + "-" + day;
+  }
+
   /* 缓存（sessionStorage + TTL） */
 
   function cacheGet(key) {
@@ -89,7 +100,7 @@ window.WikiAPI = (function () {
     try {
       return await withCache("projects", 300000, async () => {
         const repos = await fetchJSON(
-          `${GH_API}/users/${GH_USER}/repos?sort=updated&per_page=20`
+          `${GH_API}/users/${GH_USER}/repos?sort=pushed&per_page=20`
         );
         return repos
           /* 排除站点自身仓库：不单独成卡，其源码地址由 getSiteRepo 融合 */
@@ -102,14 +113,15 @@ window.WikiAPI = (function () {
               : "https://" + rawHome;
             return {
               id: repo.name,
-              date: (repo.updated_at || "").slice(0, 10),
+              /* pushed_at = 最后 push 代码的时间；updated_at 会被 star/issue 等元数据活动污染 */
+              date: fmtDate(repo.pushed_at),
               category: "项目",
               tags: [repo.language, "github"].filter(Boolean),
               title: repo.name,
               summary: repo.description || "（无描述）",
               body:
                 (repo.description ? repo.description + "\n\n" : "") +
-                `语言：${repo.language || "—"} · 星标：${repo.stargazers_count} · 最近更新：${(repo.updated_at || "").slice(0, 10)}`,
+                `语言：${repo.language || "—"} · 星标：${repo.stargazers_count} · 最近更新：${fmtDate(repo.pushed_at)}`,
               source: home || `github.com/${GH_USER}/${repo.name}`,
               url: repo.html_url,
               homepage: homeHref,
