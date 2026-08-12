@@ -38,6 +38,7 @@ window.WikiAPI = (function () {
       if (!r.ok) throw new Error("HTTP " + r.status);
       const repos = await r.json();
       return repos
+        /* 排除站点自身仓库：它不单独成卡，其源码地址由 getSiteRepo 融合进「关于本站」 */
         .filter((x) => !x.fork && !x.private && x.name !== 'openweb-wiki')
         .map((repo) => {
           const rawHome = repo.homepage || "";
@@ -66,6 +67,18 @@ window.WikiAPI = (function () {
     }
   }
 
+  /* ---------- 本站源码仓库（融合进「关于本站」条目） ---------- */
+
+  async function getSiteRepo() {
+    try {
+      const r = await fetch(`${GH_API}/repos/${GH_USER}/openweb-wiki`);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return await r.json();
+    } catch (e) {
+      return null;
+    }
+  }
+
   /* ---------- 人工条目 ---------- */
 
   async function getEntries() {
@@ -79,5 +92,5 @@ window.WikiAPI = (function () {
     }
   }
 
-  return { getAuthor, getProjects, getEntries, GH_USER };
+  return { getAuthor, getProjects, getSiteRepo, getEntries, GH_USER };
 })();
