@@ -29,7 +29,7 @@
 
   const R = window.WikiRender;
 
-  /* ---------- 单一状态 ---------- */
+  /* 单一状态 */
 
   const store = {
     entries: [],
@@ -40,7 +40,7 @@
     openId: null
   };
 
-  /* ---------- 主题 ---------- */
+  /* 主题 */
 
   function currentTheme() {
     const t = rootEl.dataset.theme;
@@ -71,7 +71,7 @@
     if (!localStorage.getItem(STORAGE_KEY)) syncThemeIcon();
   });
 
-  /* ---------- 作者信息渲染 ---------- */
+  /* 作者信息渲染 */
 
   function renderAuthor() {
     const name = (store.author && store.author.name) || "Yutong Fan";
@@ -83,7 +83,7 @@
     document.title = `openweb.wiki · ${name} 的知识库`;
   }
 
-  /* ---------- 列表渲染 ---------- */
+  /* 列表渲染 */
 
   function visibleEntries() {
     const q = store.query.trim().toLowerCase();
@@ -112,7 +112,7 @@
     footUri.textContent = R.BRAND;
   }
 
-  /* ---------- 两阶段加载 ---------- */
+  /* 两阶段加载 */
 
   function mergeSiteRepo(local, site) {
     const about = local.find((e) => e.category === "关于");
@@ -171,7 +171,7 @@
     routeFromHash();
   }
 
-  /* ---------- 模态 ---------- */
+  /* 模态 */
 
   function openEntry(id) {
     const e = store.entries.find((x) => x.id === id);
@@ -203,7 +203,7 @@
     store.openId = null;
   }
 
-  /* ---------- hash 路由 ---------- */
+  /* hash 路由 */
 
   function routeFromHash() {
     const m = location.hash.match(/^#\/?entries\/(.+)$/i);
@@ -218,7 +218,7 @@
     else routeFromHash();
   });
 
-  /* ---------- 模态搜索 ---------- */
+  /* 模态搜索 */
 
   function renderModalResults(q) {
     const qq = q.trim().toLowerCase();
@@ -245,7 +245,7 @@
     setTimeout(() => { modalResults.classList.remove("is-open"); }, 150)
   );
 
-  /* ---------- 事件 ---------- */
+  /* 事件 */
 
   document.addEventListener("click", (ev) => {
     const jump = ev.target.closest("[data-jump]");
@@ -337,7 +337,7 @@
     window.scrollTo({ top: 0, behavior: smooth ? "smooth" : "auto" });
   });
 
-  /* ---------- 复制 / Toast ---------- */
+  /* 复制 / Toast */
 
   function copyText(text) {
     const fallback = () =>
