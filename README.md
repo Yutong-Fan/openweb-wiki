@@ -2,7 +2,7 @@
 
 **Yutong Fan 的个人知识库** —— 项目、笔记、折腾记录，每条知识都有自己的地址。
 
-**在线站点：<https://yutong-fan.github.io/openweb-wiki/>**
+**在线站点：<https://openweb.wiki>**
 
 纯静态、零后端、**零硬编码**：作者信息与项目条目全部由 GitHub API 实时同步，人工条目单独维护。改内容不用碰代码。
 
@@ -80,9 +80,9 @@ cd openweb-wiki && python3 -m http.server 8901
 纯静态站，任意静态托管即可：
 
 ```sh
-# GitHub Pages 已启用（Deploy from branch: main /）
+# Cloudflare Pages 连接 GitHub 仓库自动部署
 # 仓库：github.com/Yutong-Fan/openweb-wiki
-# 站点：https://yutong-fan.github.io/openweb-wiki/
+# 站点：https://openweb.wiki
 ```
 
 绑定自有域名（如 openweb.wiki）后在仓库 Settings → Pages 配置 Custom domain，
