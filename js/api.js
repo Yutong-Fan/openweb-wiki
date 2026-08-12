@@ -38,7 +38,7 @@ window.WikiAPI = (function () {
       if (!r.ok) throw new Error("HTTP " + r.status);
       const repos = await r.json();
       return repos
-        .filter((x) => !x.fork && !x.private)
+        .filter((x) => !x.fork && !x.private && x.name !== 'openweb-wiki')
         .map((repo) => {
           const rawHome = repo.homepage || "";
           const home = rawHome.replace(/^https?:\/\//, "").replace(/\/$/, "");
