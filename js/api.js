@@ -159,6 +159,24 @@ window.WikiAPI = (function () {
     }
   }
 
+  /* 任意仓库 README（按需拉取，TTL 30 分钟，键名按仓库隔离） */
+
+  async function getRepoReadme(repoName, force) {
+    if (force) sessionStorage.removeItem(CACHE_PREFIX + "readme:" + repoName);
+    try {
+      return await withCache("readme:" + repoName, 1800000, async () => {
+        const r = await fetchWithTimeout(
+          `${GH_API}/repos/${GH_USER}/${encodeURIComponent(repoName)}/readme`,
+          { headers: { Accept: "application/vnd.github.raw+json" } }
+        );
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return await r.text();
+      });
+    } catch (e) {
+      return "";
+    }
+  }
+
   /* 人工条目：优先 script 标签注入（不依赖 fetch，永不挂起），fetch 仅兜底 */
 
   async function getEntries() {
@@ -193,6 +211,7 @@ window.WikiAPI = (function () {
     getProjects,
     getSiteRepo,
     getReadme,
+    getRepoReadme,
     getEntries,
     getRemote,
     GH_USER
