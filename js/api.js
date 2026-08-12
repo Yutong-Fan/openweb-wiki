@@ -11,7 +11,7 @@ window.WikiAPI = (function () {
   const ENTRIES_URL = "data/entries.json";
   const CACHE_PREFIX = "ow-cache:";
 
-  /* ---------- 缓存（sessionStorage + TTL） ---------- */
+  /* 缓存（sessionStorage + TTL） */
 
   function cacheGet(key) {
     try {
@@ -37,7 +37,7 @@ window.WikiAPI = (function () {
     } catch (e) { /* 存储不可用则跳过 */ }
   }
 
-  /* ---------- 基础请求（带超时，防挂起） ---------- */
+  /* 基础请求（带超时，防挂起） */
 
   async function fetchWithTimeout(url, options, ms) {
     const ctrl = new AbortController();
@@ -63,7 +63,7 @@ window.WikiAPI = (function () {
     return value;
   }
 
-  /* ---------- 作者信息（TTL 1 天） ---------- */
+  /* 作者信息（TTL 1 天） */
 
   async function getAuthor(force) {
     if (force) sessionStorage.removeItem(CACHE_PREFIX + "author");
@@ -82,7 +82,7 @@ window.WikiAPI = (function () {
     }
   }
 
-  /* ---------- 项目条目（TTL 5 分钟） ---------- */
+  /* 项目条目（TTL 5 分钟） */
 
   async function getProjects(force) {
     if (force) sessionStorage.removeItem(CACHE_PREFIX + "projects");
@@ -122,7 +122,7 @@ window.WikiAPI = (function () {
     }
   }
 
-  /* ---------- 本站源码仓库（TTL 1 天，融合进「关于本站」） ---------- */
+  /* 本站源码仓库（TTL 1 天，融合进「关于本站」） */
 
   async function getSiteRepo(force) {
     if (force) sessionStorage.removeItem(CACHE_PREFIX + "siteRepo");
@@ -141,7 +141,7 @@ window.WikiAPI = (function () {
     }
   }
 
-  /* ---------- 本站 README（TTL 30 分钟） ---------- */
+  /* 本站 README（TTL 30 分钟） */
 
   async function getReadme(force) {
     if (force) sessionStorage.removeItem(CACHE_PREFIX + "readme");
@@ -159,7 +159,7 @@ window.WikiAPI = (function () {
     }
   }
 
-  /* ---------- 人工条目（本地，不缓存） ---------- */
+  /* 人工条目（本地，不缓存） */
 
   async function getEntries() {
     try {
@@ -172,7 +172,7 @@ window.WikiAPI = (function () {
     }
   }
 
-  /* ---------- 远端数据组合（两阶段加载的第二阶段） ---------- */
+  /* 远端数据组合（两阶段加载的第二阶段） */
 
   async function getRemote() {
     const [author, projects, site, readme] = await Promise.all([
