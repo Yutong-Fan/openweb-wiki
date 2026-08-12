@@ -28,6 +28,7 @@
   const R = window.WikiRender;
   let entries = [];
   let author = { name: "Yutong Fan" };
+  let readmeHtml = "";
   let activeCategory = "全部";
   let query = "";
   let openId = null;
@@ -69,10 +70,12 @@
       WikiAPI.getAuthor(),
       WikiAPI.getEntries(),
       WikiAPI.getProjects(),
-      WikiAPI.getSiteRepo()
+      WikiAPI.getSiteRepo(),
+      WikiAPI.getReadme()
     ])
-      .then(([a, local, gh, site]) => {
+      .then(([a, local, gh, site, readmeMd]) => {
         author = a;
+        readmeHtml = readmeMd ? R.mdToHtml(readmeMd) : "";
         /* 融合：本站源码仓库不单独成卡，地址并入「关于本站」条目 */
         if (site) {
           const about = local.find((e) => e.category === "关于");
@@ -132,7 +135,7 @@
         (query ? ` · 关键词「${query}」` : "") +
         (activeCategory !== "全部" ? ` · ${activeCategory}` : "")
       : "";
-    footUri.textContent = R.SITE;
+    footUri.textContent = R.BRAND;
   }
 
   /* ---------- 模态 ---------- */
@@ -140,7 +143,7 @@
   function openEntry(id) {
     const e = entries.find((x) => x.id === id);
     if (!e) return;
-    R.modal(e, modalBody, entries, { author: author.name });
+    R.modal(e, modalBody, entries, { author: author.name }, readmeHtml);
     openId = e.id;
     modalSearch.value = "";
     modalResults.classList.remove("is-open");
