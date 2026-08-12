@@ -101,7 +101,7 @@
 
   function render() {
     const list = visibleEntries();
-    R.grid(list, grid);
+    R.grid(list, grid, { author: store.author ? store.author.name : "" });
     const parts = [];
     if (list.length) parts.push(`${String(list.length).padStart(2, "0")} 条条目`);
     if (store.query) parts.push(`关键词「${store.query}」`);
