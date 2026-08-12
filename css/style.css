@@ -128,7 +128,7 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
   a { color: var(--accent); }
 }
 
-/* ---------- 头部 ---------- */
+/* 头部 */
 
 .head {
   position: sticky;
@@ -231,7 +231,7 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .theme-toggle svg { transition: transform 0.4s var(--ease); }
 .theme-toggle:active svg { transform: rotate(120deg) scale(0.8); }
 
-/* ---------- 主区 ---------- */
+/* 主区 */
 
 .main {
   flex: 1;
@@ -304,7 +304,7 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
   align-items: start;
 }
 
-/* ---------- 卡片 ---------- */
+/* 卡片 */
 
 .entry {
   position: relative;
@@ -443,7 +443,7 @@ a.entry__src:hover { color: var(--accent); text-decoration: underline; }
   to   { opacity: 1; translate: 0 0; }
 }
 
-/* ---------- 空状态 ---------- */
+/* 空状态 */
 
 .empty {
   grid-column: 1 / -1;
@@ -459,7 +459,7 @@ a.entry__src:hover { color: var(--accent); text-decoration: underline; }
   padding: 0.1rem 0.35rem;
 }
 
-/* ---------- 页脚 ---------- */
+/* 页脚 */
 
 .foot {
   border-top: 1px solid var(--line);
@@ -475,7 +475,7 @@ a.entry__src:hover { color: var(--accent); text-decoration: underline; }
   .foot__uri { color: var(--accent); }
 }
 
-/* ---------- 返回顶部 ---------- */
+/* 返回顶部 */
 
 .back-top {
   position: fixed;
@@ -493,7 +493,7 @@ a.entry__src:hover { color: var(--accent); text-decoration: underline; }
   pointer-events: auto;
 }
 
-/* ---------- 模态 ---------- */
+/* 模态 */
 
 .modal {
   border: 0;
@@ -876,7 +876,7 @@ a.entry__src:hover { color: var(--accent); text-decoration: underline; }
   text-align: center;
 }
 
-/* ---------- Toast ---------- */
+/* Toast */
 
 .toast {
   position: fixed;
@@ -901,7 +901,7 @@ a.entry__src:hover { color: var(--accent); text-decoration: underline; }
   to   { opacity: 1; translate: 0 0; }
 }
 
-/* ---------- 窄屏 ---------- */
+/* 窄屏 */
 
 @media (max-width: 560px) {
   .head__inner { padding-inline: 1rem; gap: 0.6rem; }
@@ -912,7 +912,7 @@ a.entry__src:hover { color: var(--accent); text-decoration: underline; }
   .index__grid { grid-template-columns: 1fr; }
 }
 
-/* ---------- 打印 ---------- */
+/* 打印 */
 
 @media print {
   .head, .filters, .back-top, .icon-btn, .modal__search { display: none !important; }
@@ -921,7 +921,7 @@ a.entry__src:hover { color: var(--accent); text-decoration: underline; }
   .main { padding-block-start: 0.5rem; }
 }
 
-/* ---------- 动效偏好 ---------- */
+/* 动效偏好 */
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
