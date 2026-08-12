@@ -17,8 +17,9 @@ window.WikiRender = (function () {
 
   /* 模板占位符：{{author}} 等由 API 数据替换 */
   function applyTemplate(text, vars) {
+    const v = vars || {};
     return text.replace(/\{\{(\w+)\}\}/g, (_, k) =>
-      vars[k] != null ? vars[k] : ""
+      v[k] != null ? v[k] : ""
     );
   }
 
