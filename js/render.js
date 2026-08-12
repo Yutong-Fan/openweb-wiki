@@ -22,7 +22,7 @@ window.WikiRender = (function () {
     );
   }
 
-  /* ---------- 作者信息 ---------- */
+  /* 作者信息 */
 
   function author(el, author) {
     const name = author.name || "Yutong Fan";
@@ -33,7 +33,7 @@ window.WikiRender = (function () {
     document.title = `${SITE} · ${name} 的知识库`;
   }
 
-  /* ---------- wikilink 解析 ---------- */
+  /* wikilink 解析 */
 
   function findEntry(entries, ref) {
     const r = ref.trim();
@@ -71,7 +71,7 @@ window.WikiRender = (function () {
   }
 
 
-  /* ---------- 轻量 Markdown 渲染（README 融合用） ---------- */
+  /* 轻量 Markdown 渲染（README 融合用） */
 
   function mdInline(str) {
     return esc(str)
@@ -163,7 +163,7 @@ window.WikiRender = (function () {
   }
 
 
-  /* ---------- 筛选 chips ---------- */
+  /* 筛选 chips */
 
   const CAT_ORDER = ["项目", "笔记", "灵感", "阅读", "折腾", "关于"];
 
@@ -186,7 +186,7 @@ window.WikiRender = (function () {
       .join("");
   }
 
-  /* ---------- 卡片 ---------- */
+  /* 卡片 */
 
   function card(e, i, vars) {
     const tags = (e.tags || [])
@@ -238,7 +238,7 @@ window.WikiRender = (function () {
     el.innerHTML = list.map((e, i) => card(e, i, vars)).join("");
   }
 
-  /* ---------- 模态 ---------- */
+  /* 模态 */
 
   function modal(e, bodyEl, entries, vars, readmeHtml) {
     const tags = (e.tags || [])
@@ -283,7 +283,7 @@ window.WikiRender = (function () {
       `</button></div>`;
   }
 
-  /* ---------- 模态搜索 ---------- */
+  /* 模态搜索 */
 
   function searchResults(list, el) {
     if (!list.length) {
