@@ -37,7 +37,9 @@
     readmeHtml: "",
     category: "全部",
     query: "",
-    openId: null
+    openId: null,
+    phase: "loading",      /* loading -> local -> syncing -> ready | error */
+    remoteFailed: false
   };
 
   /* 主题 */
@@ -100,16 +102,21 @@
   }
 
   function render() {
-    const list = visibleEntries();
-    R.grid(list, grid, { author: store.author ? store.author.name : "" });
-    const parts = [];
-    if (list.length) parts.push(`${String(list.length).padStart(2, "0")} 条条目`);
-    if (store.query) parts.push(`关键词「${store.query}」`);
-    if (store.category !== "全部") parts.push(store.category);
-    if (store.syncing) parts.push("正在同步 GitHub 数据…");
-    if (store.remoteFailed) parts.push("GitHub 数据加载失败，仅显示本地条目");
-    status.textContent = parts.join(" · ");
-    footUri.textContent = R.BRAND;
+    try {
+      const list = visibleEntries();
+      R.grid(list, grid, { author: store.author ? store.author.name : "" });
+      const parts = [];
+      if (list.length) parts.push(`${String(list.length).padStart(2, "0")} 条条目`);
+      if (store.query) parts.push(`关键词「${store.query}」`);
+      if (store.category !== "全部") parts.push(store.category);
+      if (store.phase === "syncing") parts.push("正在同步 GitHub 数据…");
+      if (store.remoteFailed) parts.push("GitHub 数据加载失败，仅显示本地条目");
+      if (store.phase === "error") parts.push("加载失败，请刷新重试");
+      status.textContent = parts.join(" · ");
+      footUri.textContent = R.BRAND;
+    } catch (e) {
+      status.textContent = "渲染异常，请刷新重试";
+    }
   }
 
   /* 两阶段加载 */
@@ -124,8 +131,10 @@
   }
 
   function renderAll() {
-    renderAuthor();
-    filtersEl.innerHTML = R.filters(store.entries, store.category);
+    try {
+      renderAuthor();
+      filtersEl.innerHTML = R.filters(store.entries, store.category);
+    } catch (e) { /* 单点失败不阻塞后续 */ }
     render();
   }
 
@@ -137,35 +146,50 @@
   }
 
   async function boot() {
-    initTheme();
+    try { initTheme(); } catch (e) {}
 
-    /* 阶段 1：本地条目秒开（看门狗 6s 兜底） */
-    store.syncing = true;
+    /* 阶段 1：本地条目（script 注入，无网络依赖；fetch 兜底 + 看门狗） */
+    store.phase = "loading";
     grid.innerHTML = `<div class="empty">正在加载…</div>`;
-    const local = await Promise.race([
-      WikiAPI.getEntries(),
-      watchdog(6000, [])
-    ]);
-    store.entries = local;
-    renderAll();
+    let local = [];
+    try {
+      local = await Promise.race([
+        WikiAPI.getEntries(),
+        watchdog(6000, [])
+      ]);
+      store.entries = local;
+      store.phase = "local";
+      renderAll();
+    } catch (e) {
+      store.phase = "error";
+      grid.innerHTML = `<div class="empty">本地数据加载失败<br>请刷新重试</div>`;
+      return;
+    }
 
-    /* 阶段 2：GitHub 数据后补（看门狗 12s 兜底） */
-    const remote = await Promise.race([
-      WikiAPI.getRemote(),
-      watchdog(12000, {
-        author: null, projects: [], site: null, readme: "", ok: false
-      })
-    ]);
-    store.syncing = false;
+    /* 阶段 2：GitHub 数据后补（任何失败降级为本地条目，不阻塞） */
+    store.phase = "syncing";
+    render();
+    let remote = null;
+    try {
+      remote = await Promise.race([
+        WikiAPI.getRemote(),
+        watchdog(12000, {
+          author: null, projects: [], site: null, readme: "", ok: false
+        })
+      ]);
+    } catch (e) {
+      remote = { author: null, projects: [], site: null, readme: "", ok: false };
+    }
+    store.phase = "ready";
     if (!remote.ok) {
       store.remoteFailed = true;
     } else {
-      if (remote.author) store.author = remote.author;
-      if (remote.site) mergeSiteRepo(local, remote.site);
-      if (remote.readme) {
-        store.readmeHtml = R.mdToHtml(remote.readme);
-      }
-      store.entries = local.concat(remote.projects);
+      try {
+        if (remote.author) store.author = remote.author;
+        if (remote.site) mergeSiteRepo(local, remote.site);
+        if (remote.readme) store.readmeHtml = R.mdToHtml(remote.readme);
+        store.entries = local.concat(remote.projects);
+      } catch (e) { /* 合并失败不阻塞 */ }
     }
     renderAll();
     routeFromHash();
@@ -376,6 +400,14 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.remove("is-visible"), 1800);
   }
+
+  /* 全局错误兜底：任何未捕获异常显示提示，不白屏 */
+  window.addEventListener("error", (e) => {
+    const g = document.getElementById("grid");
+    if (g && !g.querySelector(".entry")) {
+      g.innerHTML = `<div class="empty">页面发生错误：${R.esc(e.message || "未知错误")}<br>请刷新重试</div>`;
+    }
+  });
 
   boot();
 })();
