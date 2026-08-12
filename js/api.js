@@ -79,6 +79,20 @@ window.WikiAPI = (function () {
     }
   }
 
+  /* ---------- 本站 README（融合进「关于本站」条目） ---------- */
+
+  async function getReadme() {
+    try {
+      const r = await fetch(`${GH_API}/repos/${GH_USER}/openweb-wiki/readme`, {
+        headers: { Accept: "application/vnd.github.raw+json" }
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return await r.text();
+    } catch (e) {
+      return "";
+    }
+  }
+
   /* ---------- 人工条目 ---------- */
 
   async function getEntries() {
@@ -92,5 +106,5 @@ window.WikiAPI = (function () {
     }
   }
 
-  return { getAuthor, getProjects, getSiteRepo, getEntries, GH_USER };
+  return { getAuthor, getProjects, getSiteRepo, getReadme, getEntries, GH_USER };
 })();
