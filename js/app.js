@@ -1,4 +1,6 @@
-/* 入口层：状态管理 / 主题 / 路由 / 事件
+/* 入口层：状态管理 / 两阶段加载 / 主题 / 路由 / 事件
+   阶段 1：本地条目立即渲染（秒开）
+   阶段 2：GitHub 数据到达后合并渲染（渐进增强）
    数据来自 WikiAPI，渲染交给 WikiRender */
 
 (function () {
@@ -26,12 +28,17 @@
   const footNote = document.getElementById("foot-note");
 
   const R = window.WikiRender;
-  let entries = [];
-  let author = { name: "Yutong Fan" };
-  let readmeHtml = "";
-  let activeCategory = "全部";
-  let query = "";
-  let openId = null;
+
+  /* ---------- 单一状态 ---------- */
+
+  const store = {
+    entries: [],
+    author: null,
+    readmeHtml: "",
+    category: "全部",
+    query: "",
+    openId: null
+  };
 
   /* ---------- 主题 ---------- */
 
@@ -48,10 +55,15 @@
     );
   }
 
+  function initTheme() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved === "dark" || saved === "light") rootEl.dataset.theme = saved;
+    syncThemeIcon();
+  }
+
   themeToggle.addEventListener("click", () => {
-    const next = currentTheme() === "dark" ? "light" : "dark";
-    rootEl.dataset.theme = next;
-    try { localStorage.setItem(STORAGE_KEY, next); } catch (e) {}
+    rootEl.dataset.theme = currentTheme() === "dark" ? "light" : "dark";
+    try { localStorage.setItem(STORAGE_KEY, rootEl.dataset.theme); } catch (e) {}
     syncThemeIcon();
   });
 
@@ -59,66 +71,26 @@
     if (!localStorage.getItem(STORAGE_KEY)) syncThemeIcon();
   });
 
-  /* ---------- 数据 ---------- */
+  /* ---------- 作者信息渲染 ---------- */
 
-  function boot() {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === "dark" || saved === "light") rootEl.dataset.theme = saved;
-    syncThemeIcon();
-
-    Promise.all([
-      WikiAPI.getAuthor(),
-      WikiAPI.getEntries(),
-      WikiAPI.getProjects(),
-      WikiAPI.getSiteRepo(),
-      WikiAPI.getReadme()
-    ])
-      .then(([a, local, gh, site, readmeMd]) => {
-        author = a;
-        readmeHtml = readmeMd ? R.mdToHtml(readmeMd) : "";
-        /* 融合：本站源码仓库不单独成卡，地址并入「关于本站」条目 */
-        if (site) {
-          const about = local.find((e) => e.category === "关于");
-          if (about) {
-            about.source = `github.com/${site.full_name}`;
-            about.url = site.html_url;
-            const hp = site.homepage || "";
-            about.homepage = /^https?:\/\//.test(hp) ? hp : hp ? "https://" + hp : "";
-          }
-        }
-        entries = local.concat(gh);
-        renderAll();
-        routeFromHash();
-      })
-      .catch(() => {
-        grid.innerHTML =
-          `<div class="empty">条目加载失败<br>请检查网络后刷新</div>`;
-      });
-  }
-
-  function renderAll() {
-    /* 作者信息（API 驱动，零硬编码） */
-    if (heroTitle) {
-      heroTitle.textContent = `${author.name} 的知识库`;
-      heroSub.textContent = author.bio
-        ? author.bio
-        : "项目、笔记、折腾记录 —— 每条知识都有自己的地址。";
-    }
-    if (footNote) {
-      footNote.textContent = `${author.name} · 个人知识库，条目开放共享`;
-    }
-    document.title = `openweb.wiki · ${author.name} 的知识库`;
-
-    filtersEl.innerHTML = R.filters(entries, activeCategory);
-    render();
+  function renderAuthor() {
+    const name = (store.author && store.author.name) || "Yutong Fan";
+    heroTitle.textContent = `${name} 的知识库`;
+    heroSub.textContent =
+      (store.author && store.author.bio) ||
+      "项目、笔记、折腾记录 —— 每条知识都有自己的地址。";
+    footNote.textContent = `${name} · 个人知识库，条目开放共享`;
+    document.title = `openweb.wiki · ${name} 的知识库`;
   }
 
   /* ---------- 列表渲染 ---------- */
 
   function visibleEntries() {
-    const q = query.trim().toLowerCase();
-    return entries
-      .filter((e) => activeCategory === "全部" || e.category === activeCategory)
+    const q = store.query.trim().toLowerCase();
+    return store.entries
+      .filter(
+        (e) => store.category === "全部" || e.category === store.category
+      )
       .filter((e) => {
         if (!q) return true;
         return [e.id, e.title, e.summary, e.body, e.category, ...(e.tags || [])]
@@ -129,22 +101,83 @@
 
   function render() {
     const list = visibleEntries();
-    R.grid(list, grid, { author: author.name });
-    status.textContent = list.length
-      ? `${String(list.length).padStart(2, "0")} 条条目` +
-        (query ? ` · 关键词「${query}」` : "") +
-        (activeCategory !== "全部" ? ` · ${activeCategory}` : "")
-      : "";
+    R.grid(list, grid);
+    const parts = [];
+    if (list.length) parts.push(`${String(list.length).padStart(2, "0")} 条条目`);
+    if (store.query) parts.push(`关键词「${store.query}」`);
+    if (store.category !== "全部") parts.push(store.category);
+    if (store.syncing) parts.push("正在同步 GitHub 数据…");
+    if (store.remoteFailed) parts.push("GitHub 数据加载失败，仅显示本地条目");
+    status.textContent = parts.join(" · ");
     footUri.textContent = R.BRAND;
+  }
+
+  /* ---------- 两阶段加载 ---------- */
+
+  function mergeSiteRepo(local, site) {
+    const about = local.find((e) => e.category === "关于");
+    if (about && site) {
+      about.source = site.source;
+      about.url = site.url;
+      about.homepage = site.homepage;
+    }
+  }
+
+  function renderAll() {
+    renderAuthor();
+    filtersEl.innerHTML = R.filters(store.entries, store.category);
+    render();
+  }
+
+  /* 看门狗：任何阶段卡住都能继续（防止挂起的请求阻塞整站） */
+  function watchdog(ms, fallback) {
+    return new Promise((resolve) =>
+      setTimeout(() => resolve(fallback), ms)
+    );
+  }
+
+  async function boot() {
+    initTheme();
+
+    /* 阶段 1：本地条目秒开（看门狗 6s 兜底） */
+    store.syncing = true;
+    grid.innerHTML = `<div class="empty">正在加载…</div>`;
+    const local = await Promise.race([
+      WikiAPI.getEntries(),
+      watchdog(6000, [])
+    ]);
+    store.entries = local;
+    renderAll();
+
+    /* 阶段 2：GitHub 数据后补（看门狗 12s 兜底） */
+    const remote = await Promise.race([
+      WikiAPI.getRemote(),
+      watchdog(12000, {
+        author: null, projects: [], site: null, readme: "", ok: false
+      })
+    ]);
+    store.syncing = false;
+    if (!remote.ok) {
+      store.remoteFailed = true;
+    } else {
+      if (remote.author) store.author = remote.author;
+      if (remote.site) mergeSiteRepo(local, remote.site);
+      if (remote.readme) {
+        store.readmeHtml = R.mdToHtml(remote.readme);
+      }
+      store.entries = local.concat(remote.projects);
+    }
+    renderAll();
+    routeFromHash();
   }
 
   /* ---------- 模态 ---------- */
 
   function openEntry(id) {
-    const e = entries.find((x) => x.id === id);
+    const e = store.entries.find((x) => x.id === id);
     if (!e) return;
-    R.modal(e, modalBody, entries, { author: author.name }, readmeHtml);
-    openId = e.id;
+    R.modal(e, modalBody, store.entries, { author: store.author ? store.author.name : "" }, store.readmeHtml);
+    store.openId = e.id;
     modalSearch.value = "";
     modalResults.classList.remove("is-open");
     if (supportsDialog) {
@@ -164,10 +197,10 @@
     } else if (!modal.hasAttribute("hidden")) {
       modal.setAttribute("hidden", "");
     }
-    if (openId && location.hash) {
+    if (store.openId && location.hash) {
       history.replaceState(null, "", location.pathname + location.search);
     }
-    openId = null;
+    store.openId = null;
   }
 
   /* ---------- hash 路由 ---------- */
@@ -176,7 +209,7 @@
     const m = location.hash.match(/^#\/?entries\/(.+)$/i);
     if (m) {
       const id = decodeURIComponent(m[1]);
-      if (entries.some((e) => e.id === id)) openEntry(id);
+      if (store.entries.some((e) => e.id === id)) openEntry(id);
     }
   }
 
@@ -193,7 +226,7 @@
       modalResults.classList.remove("is-open");
       return;
     }
-    const hits = entries
+    const hits = store.entries
       .filter((e) =>
         [e.id, e.title, e.summary, ...(e.tags || [])]
           .join(" ").toLowerCase().includes(qq)
@@ -233,8 +266,8 @@
     if (tagBtn) {
       ev.stopPropagation();
       searchInput.value = tagBtn.dataset.tag;
-      query = tagBtn.dataset.tag;
-      activeCategory = "全部";
+      store.query = tagBtn.dataset.tag;
+      store.category = "全部";
       filtersEl.querySelectorAll(".chip").forEach((c) =>
         c.classList.toggle("is-active", c.dataset.filter === "全部")
       );
@@ -265,7 +298,7 @@
   filtersEl.addEventListener("click", (ev) => {
     const chip = ev.target.closest(".chip");
     if (!chip) return;
-    activeCategory = chip.dataset.filter;
+    store.category = chip.dataset.filter;
     filtersEl.querySelectorAll(".chip").forEach((c) =>
       c.classList.toggle("is-active", c === chip)
     );
@@ -276,7 +309,7 @@
   searchInput.addEventListener("input", () => {
     clearTimeout(debounce);
     debounce = setTimeout(() => {
-      query = searchInput.value;
+      store.query = searchInput.value;
       render();
     }, 120);
   });
@@ -286,10 +319,10 @@
     if (ev.target === modal) closeModal();
   });
   modal.addEventListener("close", () => {
-    if (openId && location.hash) {
+    if (store.openId && location.hash) {
       history.replaceState(null, "", location.pathname + location.search);
     }
-    openId = null;
+    store.openId = null;
     const card = grid.querySelector(`[data-id="${modal.dataset.lastId}"]`);
     if (card) card.focus();
   });
