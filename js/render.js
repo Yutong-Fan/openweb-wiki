@@ -195,7 +195,12 @@ window.WikiRender = (function () {
           `<button class="entry__tag" type="button" data-tag="${esc(t)}">#${esc(t)}</button>`
       )
       .join("");
-    const srcHref = e.homepage || e.url;
+    /* 显示与链接必须一致：source 是 GitHub 地址就链 GitHub 仓库，
+       否则用 homepage（官网） */
+    const srcHref =
+      e.source && e.source.indexOf("github.com/") === 0
+        ? e.url
+        : e.homepage || e.url;
     const src = e.source
       ? srcHref
         ? `<a class="entry__src" href="${esc(srcHref)}" target="_blank" rel="noopener" ` +
