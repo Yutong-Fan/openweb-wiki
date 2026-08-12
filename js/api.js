@@ -159,9 +159,12 @@ window.WikiAPI = (function () {
     }
   }
 
-  /* 人工条目（本地，不缓存） */
+  /* 人工条目：优先 script 标签注入（不依赖 fetch，永不挂起），fetch 仅兜底 */
 
   async function getEntries() {
+    if (Array.isArray(window.WIKI_ENTRIES) && window.WIKI_ENTRIES.length) {
+      return window.WIKI_ENTRIES;
+    }
     try {
       const r = await fetchWithTimeout(ENTRIES_URL, { cache: "no-store" });
       if (!r.ok) throw new Error("HTTP " + r.status);
