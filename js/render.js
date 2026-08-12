@@ -5,6 +5,7 @@ window.WikiRender = (function () {
   "use strict";
 
   const SITE = "https://openweb.wiki";
+  const BRAND = "openweb.wiki";
 
   const esc = (s) =>
     String(s == null ? "" : s)
@@ -68,6 +69,99 @@ window.WikiRender = (function () {
       .map((p) => `<p>${linkify(p.replace(/\n/g, "<br>"), entries, vars)}</p>`)
       .join("");
   }
+
+
+  /* ---------- 轻量 Markdown 渲染（README 融合用） ---------- */
+
+  function mdInline(str) {
+    return esc(str)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,
+        (_, t, u) =>
+          `<a href="${u}" target="_blank" rel="noopener">${t}</a>`)
+      .replace(/&lt;([a-z][a-z0-9+.-]*:\/\/[^&]+)&gt;/gi,
+        (_, u) =>
+          `<a href="${u}" target="_blank" rel="noopener">${u}</a>`)
+      .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  }
+
+  function mdTable(rows) {
+    const head = rows[0].split("|").map((c) => c.trim()).filter(Boolean);
+    const body = rows.slice(2)
+      .map((r) => r.split("|").map((c) => c.trim()).filter(Boolean))
+      .filter((cells) => cells.length);
+    if (!body.length) return "";
+    const th = head.map((h) => `<th>${mdInline(h)}</th>`).join("");
+    const trs = body
+      .map((cells) => `<tr>${cells.map((c) => `<td>${mdInline(c)}</td>`).join("")}</tr>`)
+      .join("");
+    return `<div class="md-table"><table><thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table></div>`;
+  }
+
+  function mdToHtml(md) {
+    const lines = md.replace(/\r\n/g, "\n").split("\n");
+    let html = "";
+    let inCode = false;
+    let codeBuf = [];
+    let inTable = false;
+    let tableBuf = [];
+    let listBuf = [];
+
+    const flushList = () => {
+      if (listBuf.length) {
+        html += `<ul>${listBuf.map((li) => `<li>${li}</li>`).join("")}</ul>`;
+        listBuf = [];
+      }
+    };
+    const flushTable = () => {
+      if (inTable) {
+        html += mdTable(tableBuf);
+        tableBuf = [];
+        inTable = false;
+      }
+    };
+
+    for (const line of lines) {
+      if (line.trim().startsWith("```")) {
+        if (inCode) {
+          html += `<pre><code>${esc(codeBuf.join("\n"))}</code></pre>`;
+          codeBuf = [];
+          inCode = false;
+        } else {
+          flushList(); flushTable();
+          inCode = true;
+        }
+        continue;
+      }
+      if (inCode) { codeBuf.push(line); continue; }
+
+      const t = line.trim();
+      if (!t) { flushList(); flushTable(); continue; }
+
+      if (/^#{1,4} /.test(t)) {
+        flushList(); flushTable();
+        const level = t.match(/^#+/)[0].length;
+        html += `<h${level + 1}>${mdInline(t.replace(/^#+ /, ""))}</h${level + 1}>`;
+      } else if (/^\|/.test(t) && t.endsWith("|")) {
+        if (!inTable) { flushList(); inTable = true; }
+        tableBuf.push(t);
+      } else if (/^- /.test(t)) {
+        flushTable();
+        listBuf.push(mdInline(t.replace(/^- /, "")));
+      } else if (/^\d+\. /.test(t)) {
+        flushTable();
+        listBuf.push(mdInline(t.replace(/^\d+\. /, "")));
+      } else {
+        flushList(); flushTable();
+        html += `<p>${mdInline(t)}</p>`;
+      }
+    }
+    flushList(); flushTable();
+    if (inCode) html += `<pre><code>${esc(codeBuf.join("\n"))}</code></pre>`;
+    return html;
+  }
+
 
   /* ---------- 筛选 chips ---------- */
 
@@ -141,7 +235,7 @@ window.WikiRender = (function () {
 
   /* ---------- 模态 ---------- */
 
-  function modal(e, bodyEl, entries, vars) {
+  function modal(e, bodyEl, entries, vars, readmeHtml) {
     const tags = (e.tags || [])
       .map(
         (t) =>
@@ -172,6 +266,9 @@ window.WikiRender = (function () {
       `</div>` +
       `<h2 class="modal__title">${esc(e.title)}</h2>` +
       paragraphs(e.body, entries, vars) +
+      (readmeHtml
+        ? `<div class="modal__readme"><h3 class="modal__sub">仓库 README</h3>${readmeHtml}</div>`
+        : "") +
       links +
       (tags ? `<div class="modal__tags">${tags}</div>` : "") +
       `<div class="modal__uri">` +
@@ -204,6 +301,7 @@ window.WikiRender = (function () {
     uriOf,
     hashOf,
     SITE,
+    BRAND,
     applyTemplate,
     author,
     filters,
@@ -211,6 +309,7 @@ window.WikiRender = (function () {
     grid,
     modal,
     searchResults,
-    linkify
+    linkify,
+    mdToHtml
   };
 })();
