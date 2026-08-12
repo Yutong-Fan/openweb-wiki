@@ -68,10 +68,21 @@
     Promise.all([
       WikiAPI.getAuthor(),
       WikiAPI.getEntries(),
-      WikiAPI.getProjects()
+      WikiAPI.getProjects(),
+      WikiAPI.getSiteRepo()
     ])
-      .then(([a, local, gh]) => {
+      .then(([a, local, gh, site]) => {
         author = a;
+        /* 融合：本站源码仓库不单独成卡，地址并入「关于本站」条目 */
+        if (site) {
+          const about = local.find((e) => e.category === "关于");
+          if (about) {
+            about.source = `github.com/${site.full_name}`;
+            about.url = site.html_url;
+            const hp = site.homepage || "";
+            about.homepage = /^https?:\/\//.test(hp) ? hp : hp ? "https://" + hp : "";
+          }
+        }
         entries = local.concat(gh);
         renderAll();
         routeFromHash();
