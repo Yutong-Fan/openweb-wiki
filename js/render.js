@@ -4,14 +4,14 @@
 window.WikiRender = (function () {
   "use strict";
 
-  const SITE = "openweb.wiki";
+  const SITE = "https://openweb.wiki";
 
   const esc = (s) =>
     String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
 
-  const uriOf = (id) => `${SITE}/entries/${encodeURIComponent(id)}`;
+  const uriOf = (id) => `${SITE}/#/entries/${encodeURIComponent(id)}`;
   const hashOf = (id) => `#/entries/${encodeURIComponent(id)}`;
 
   /* 模板占位符：{{author}} 等由 API 数据替换 */
@@ -203,6 +203,7 @@ window.WikiRender = (function () {
     esc,
     uriOf,
     hashOf,
+    SITE,
     applyTemplate,
     author,
     filters,
