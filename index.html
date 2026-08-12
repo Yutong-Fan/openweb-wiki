@@ -9,6 +9,19 @@
   try {
     var t = localStorage.getItem("ow-theme");
     if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+    /* 加载守卫：15 秒内无卡片渲染则自动重载（防旧缓存/挂起请求卡死） */
+    setTimeout(function () {
+      if (!document.querySelector("#grid .entry")) {
+        var n = (sessionStorage.getItem("ow-reload") | 0) + 1;
+        sessionStorage.setItem("ow-reload", n);
+        if (n <= 2) {
+          location.reload();
+        } else {
+          var g = document.getElementById("grid");
+          if (g) g.innerHTML = '<div class="empty">加载失败，请检查网络后刷新</div>';
+        }
+      }
+    }, 15000);
   } catch (e) {}
 </script>
 <link rel="stylesheet" href="css/style.css?v=33">
@@ -71,7 +84,7 @@
 
 <main class="main" id="index">
   <div class="hero">
-    <h1 class="hero__title" id="author-name">Yutong Fan 的知识库</h1>
+    <h1 class="hero__title" id="author-name">…</h1>
     <p class="hero__sub" id="author-sub">项目、笔记、折腾记录 —— 每条知识都有自己的地址。</p>
   </div>
 
@@ -81,7 +94,7 @@
 </main>
 
 <footer class="foot">
-  <p id="foot-note">Yutong Fan · 个人知识库，条目开放共享</p>
+  <p id="foot-note">…</p>
   <p class="foot__uri" id="foot-uri">openweb.wiki</p>
 </footer>
 
@@ -108,6 +121,6 @@
 
 <script src="js/api.js?v=33"></script>
 <script src="js/render.js?v=33"></script>
-<script src="js/app.js?v=33"></script>
+<script src="js/app.js?v=34"></script>
 </body>
 </html>
