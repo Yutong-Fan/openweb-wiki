@@ -29,6 +29,7 @@ openweb-wiki/
 |---|---|---|
 | 作者信息 | `users/Yutong-Fan` API | 名字 / bio 实时获取，hero 标题、页脚、页面 title 自动填充 |
 | 项目条目 | `users/Yutong-Fan/repos` API | 新增 / 改名 / 加 star / 挂官网全部自动同步；公开 API 不返回私有仓库 |
+| 本站源码 | `repos/Yutong-Fan/openweb-wiki` API | 不单独成卡，源码地址自动融合进「关于本站」条目（卡片地址行 + 详情页链接） |
 | 人工条目 | `data/entries.json` | 笔记 / 关于等手动维护内容 |
 
 人工条目支持两种模板语法：
