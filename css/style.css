@@ -1,5 +1,5 @@
-/* openweb.wiki — 设计系统 v3
-   方向：现代开发者美学。slate 灰蓝底 + teal 青绿主色，清爽可读。 */
+/* openweb.wiki 设计系统 v3
+   方向：现代开发者美学。slate 灰蓝底配 teal 青绿主色，清爽可读。 */
 
 :root {
   --bg: #f6f7f9;
@@ -526,7 +526,7 @@ a.entry__src:hover { color: var(--accent); text-decoration: underline; }
   animation: modal-in 0.25s var(--ease);
 }
 
-/* 固定头部：搜索 + 关闭（flex 布局，无 float 冲突） */
+/* 固定头部：搜索和关闭（flex 布局，无 float 冲突） */
 .modal__top {
   flex: none;
   display: flex;
@@ -933,6 +933,6 @@ a.entry__src:hover { color: var(--accent); text-decoration: underline; }
 }
 
 /* 主题切换颜色过渡（reduced-motion 时被上面归零） */
-body, .head, .search__input, .modal__search-input, .entry, .chip, .icon-btn, .foot, .toast {
+body, .head, .modal__search-input, .entry, .chip, .icon-btn, .foot, .toast {
   transition: background-color 0.3s var(--ease), color 0.3s var(--ease), border-color 0.3s var(--ease);
 }
