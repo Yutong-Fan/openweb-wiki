@@ -1,4 +1,4 @@
-/* 入口层：状态管理 / 两阶段加载 / 主题 / 路由 / 事件
+/* 入口层：状态管理、两阶段加载、主题、路由、事件
    阶段 1：本地条目立即渲染（秒开）
    阶段 2：GitHub 数据到达后合并渲染（渐进增强）
    数据来自 WikiAPI，渲染交给 WikiRender */
@@ -35,11 +35,11 @@
     entries: [],
     author: null,
     readmeHtml: "",
-    readmeCache: {},          /* 仓库名 -> 渲染后的 README HTML（会话内复用） */
+    readmeCache: {},          /* 仓库名对应的渲染后 README，会话内复用 */
     category: "全部",
     query: "",
     openId: null,
-    phase: "loading",      /* loading -> local -> syncing -> ready | error */
+    phase: "loading",      /* loading local syncing ready 或 error */
     remoteFailed: false
   };
 
@@ -149,7 +149,7 @@
   async function boot() {
     try { initTheme(); } catch (e) {}
 
-    /* 阶段 1：本地条目（script 注入，无网络依赖；fetch 兜底 + 看门狗） */
+    /* 阶段 1：本地条目（script 注入，无网络依赖；fetch 兜底和看门狗） */
     store.phase = "loading";
     grid.innerHTML = `<div class="empty">正在加载…</div>`;
     let local = [];
@@ -398,7 +398,7 @@
     window.scrollTo({ top: 0, behavior: smooth ? "smooth" : "auto" });
   });
 
-  /* 复制 / Toast */
+  /* 复制和 Toast */
 
   function copyText(text) {
     const fallback = () =>
