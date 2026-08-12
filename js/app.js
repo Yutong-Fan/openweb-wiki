@@ -35,6 +35,7 @@
     entries: [],
     author: null,
     readmeHtml: "",
+    readmeCache: {},          /* 仓库名 -> 渲染后的 README HTML（会话内复用） */
     category: "全部",
     query: "",
     openId: null,
@@ -200,7 +201,14 @@
   function openEntry(id) {
     const e = store.entries.find((x) => x.id === id);
     if (!e) return;
-    R.modal(e, modalBody, store.entries, { author: store.author ? store.author.name : "" }, store.readmeHtml);
+    /* 只有「关于」条目融合本站 README；项目条目渲染自己的 README（懒加载） */
+    R.modal(
+      e,
+      modalBody,
+      store.entries,
+      { author: store.author ? store.author.name : "" },
+      e.category === "关于" ? store.readmeHtml : ""
+    );
     store.openId = e.id;
     modalSearch.value = "";
     modalResults.classList.remove("is-open");
@@ -210,9 +218,38 @@
       modal.classList.add("is-fallback");
       modal.removeAttribute("hidden");
     }
+    if (e.category === "项目") fillRepoReadme(e.id, modalBody);
     if (location.hash !== R.hashOf(e.id)) {
       history.pushState(null, "", R.hashOf(e.id));
     }
+  }
+
+  /* 项目条目：按需拉取该仓库自己的 README，异步填入模态
+     - 会话级缓存避免重复请求（GitHub API 限流敏感）
+     - openId / isConnected 守卫：模态已切换或关闭则不写入 */
+
+  async function fillRepoReadme(repo, bodyEl) {
+    if (!repo || bodyEl.querySelector(".modal__readme[data-repo]")) return;
+    const box = document.createElement("div");
+    box.className = "modal__readme";
+    box.dataset.repo = repo;
+    box.innerHTML =
+      `<h3 class="modal__sub">仓库 README</h3>` +
+      `<div class="modal__readme-body">加载中…</div>`;
+    bodyEl.appendChild(box);
+    const body = box.querySelector(".modal__readme-body");
+    let html = store.readmeCache[repo];
+    if (!html) {
+      try {
+        const md = await WikiAPI.getRepoReadme(repo);
+        if (md) {
+          html = R.mdToHtml(md);
+          store.readmeCache[repo] = html;
+        }
+      } catch (e) { /* 拉取失败按无 README 处理 */ }
+    }
+    if (store.openId !== repo || !body.isConnected) return;
+    body.innerHTML = html ? html : "<p>（该仓库无 README）</p>";
   }
 
   function closeModal() {
