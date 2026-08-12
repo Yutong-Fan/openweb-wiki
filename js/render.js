@@ -15,10 +15,19 @@ window.WikiRender = (function () {
   const uriOf = (id) => `${SITE}/#/entries/${encodeURIComponent(id)}`;
   const hashOf = (id) => `#/entries/${encodeURIComponent(id)}`;
 
+  /* 容错：任何渲染函数不抛未捕获异常，失败返回 fallback */
+  function safe(fn, fallback) {
+    try {
+      return fn();
+    } catch (e) {
+      return fallback;
+    }
+  }
+
   /* 模板占位符：{{author}} 等由 API 数据替换 */
   function applyTemplate(text, vars) {
     const v = vars || {};
-    return text.replace(/\{\{(\w+)\}\}/g, (_, k) =>
+    return String(text == null ? "" : text).replace(/\{\{(\w+)\}\}/g, (_, k) =>
       v[k] != null ? v[k] : ""
     );
   }
@@ -46,10 +55,11 @@ window.WikiRender = (function () {
   }
 
   function linkify(text, entries, vars) {
+    const pool = entries || [];
     return applyTemplate(esc(text), vars).replace(
       /\[\[([^\]]+)\]\]/g,
       (_, ref) => {
-        const target = findEntry(entries, ref);
+        const target = findEntry(pool, ref);
         if (!target) {
           return `<span class="wikilink" title="条目不存在">${esc(ref)}</span>`;
         }
@@ -190,6 +200,19 @@ window.WikiRender = (function () {
   /* 卡片 */
 
   function card(e, i, vars) {
+    return safe(() => cardInner(e, i, vars), cardFallback(e, i));
+  }
+
+  function cardFallback(e, i) {
+    const id = (e && e.id) || "?";
+    return (
+      `<article class="entry" style="--i:${i}" data-id="${esc(id)}">` +
+      `<span class="entry__meta"><span class="entry__id">${esc(id)}</span></span>` +
+      `<p class="entry__summary">该条目渲染失败</p></article>`
+    );
+  }
+
+  function cardInner(e, i, vars) {
     const tags = (e.tags || [])
       .map(
         (t) =>
@@ -242,6 +265,14 @@ window.WikiRender = (function () {
   /* 模态 */
 
   function modal(e, bodyEl, entries, vars, readmeHtml) {
+    try {
+      modalInner(e, bodyEl, entries, vars, readmeHtml);
+    } catch (err) {
+      if (bodyEl) bodyEl.innerHTML = `<p>该条目数据异常</p>`;
+    }
+  }
+
+  function modalInner(e, bodyEl, entries, vars, readmeHtml) {
     const tags = (e.tags || [])
       .map(
         (t) =>
@@ -287,7 +318,11 @@ window.WikiRender = (function () {
   /* 模态搜索 */
 
   function searchResults(list, el) {
-    if (!list.length) {
+    safe(() => searchInner(list, el), null);
+  }
+
+  function searchInner(list, el) {
+    if (!list || !list.length) {
       el.innerHTML = `<div class="modal__search-empty">没有匹配的条目</div>`;
     } else {
       el.innerHTML = list
