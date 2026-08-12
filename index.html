@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="openweb.wiki — Yutong Fan 的个人知识库，收录项目、笔记和折腾记录。">
+<title>openweb.wiki · Yutong Fan 的知识库</title>
+<script>
+  try {
+    var t = localStorage.getItem("ow-theme");
+    if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+  } catch (e) {}
+</script>
+<link rel="stylesheet" href="css/style.css?v=20">
+</head>
+<body>
+<a class="skip-link" href="#index">跳到条目索引</a>
+
+<svg class="sprite" aria-hidden="true">
+  <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>
+  </symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+  </symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+  </symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+  </symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+  </symbol>
+  <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+  </symbol>
+  <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>
+  </symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+  </symbol>
+  <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+  </symbol>
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>
+  </symbol>
+</svg>
+
+<header class="head">
+  <div class="head__inner">
+    <a class="brand" href="#index" aria-label="openweb.wiki 首页">
+      <svg class="brand__globe" width="22" height="22" aria-hidden="true"><use href="#i-globe"/></svg>
+      <span class="brand__name">openweb.wiki</span>
+    </a>
+
+    <label class="head__search">
+      <svg class="head__search-icon" width="15" height="15" aria-hidden="true"><use href="#i-search"/></svg>
+      <span class="visually-hidden">搜索条目</span>
+      <input class="head__search-input" id="search" type="search" placeholder="搜索条目…" autocomplete="off">
+    </label>
+
+    <button class="icon-btn theme-toggle" id="theme-toggle" type="button" aria-label="切换主题">
+      <svg class="icon-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+      <svg class="icon-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="main" id="index">
+  <div class="hero">
+    <h1 class="hero__title" id="author-name">Yutong Fan 的知识库</h1>
+    <p class="hero__sub" id="author-sub">项目、笔记、折腾记录 —— 每条知识都有自己的地址。</p>
+  </div>
+
+  <nav class="filters" id="filters" aria-label="分类筛选"></nav>
+  <p class="index__status" id="status" role="status"></p>
+  <div class="index__grid" id="grid"></div>
+</main>
+
+<footer class="foot">
+  <p id="foot-note">Yutong Fan · 个人知识库，条目开放共享</p>
+  <p class="foot__uri" id="foot-uri">openweb.wiki</p>
+</footer>
+
+<button class="back-top icon-btn" id="back-top" type="button" aria-label="返回顶部">
+  <svg aria-hidden="true"><use href="#i-up"/></svg>
+</button>
+
+<dialog class="modal" id="modal">
+  <div class="modal__panel">
+    <div class="modal__top">
+      <div class="modal__search">
+        <svg class="modal__search-icon" width="14" height="14" aria-hidden="true"><use href="#i-search"/></svg>
+        <span class="visually-hidden">在全部条目中搜索</span>
+        <input class="modal__search-input" id="modal-search" type="search" placeholder="搜索全部条目…" autocomplete="off">
+        <div class="modal__search-results" id="modal-search-results"></div>
+      </div>
+      <button class="icon-btn modal__close" id="modal-close" type="button" aria-label="关闭">
+        <svg aria-hidden="true"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <article class="modal__body" id="modal-body"></article>
+  </div>
+</dialog>
+
+<script src="js/api.js?v=21"></script>
+<script src="js/render.js?v=22"></script>
+<script src="js/app.js?v=22"></script>
+</body>
+</html>
