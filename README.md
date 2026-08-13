@@ -15,9 +15,9 @@
 ## 架构
 
 - `index.html` —— 页面骨架与主题预加载
-- `css/style.css` —— 设计系统（UI 层）
-- `js/api.js` —— 数据层：GitHub API 同步 + 缓存 + 降级
-- `js/app.js` —— 入口层：状态、路由、两阶段加载
+- `css/style.css` —— 设计系统与动效（渐变主色、玻璃态、入场动画、响应式）
+- `js/api.js` —— 数据层：GitHub API 同步 + 持久缓存 + 降级兜底
+- `js/app.js` —— 入口层：状态、路由、两阶段加载、滚动显现
 - `js/render.js` —— 渲染层：卡片、模态、Markdown
 - `data/entries.json` —— 本地条目（唯一数据源）
 

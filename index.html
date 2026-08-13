@@ -9,7 +9,7 @@
   try {
     var t = localStorage.getItem("ow-theme");
     if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
-    /* 加载守卫：20 秒内无卡片则重载一次（防旧缓存/挂起请求卡死）。
+    /* 加载守卫：20 秒内无卡片则重载一次，防旧缓存或挂起请求卡死。
        只重载一次，避免刷新反复打 GitHub API 加重配额消耗 */
     setTimeout(function () {
       if (!document.querySelector("#grid .entry")) {
@@ -27,7 +27,7 @@
     }, 20000);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="css/style.css?v=37">
+<link rel="stylesheet" href="css/style.css?v=43">
 </head>
 <body>
 <a class="skip-link" href="#index">跳到条目索引</a>
@@ -87,6 +87,7 @@
 
 <main class="main" id="index">
   <div class="hero">
+    <span class="hero__eyebrow">个人知识库</span>
     <h1 class="hero__title" id="author-name">…</h1>
     <p class="hero__sub" id="author-sub">项目、笔记、折腾记录 —— 每条知识都有自己的地址。</p>
   </div>
@@ -122,8 +123,8 @@
   </div>
 </dialog>
 
-<script src="js/api.js?v=41"></script>
-<script src="js/render.js?v=41"></script>
-<script src="js/app.js?v=42"></script>
+<script src="js/api.js?v=44"></script>
+<script src="js/render.js?v=44"></script>
+<script src="js/app.js?v=46"></script>
 </body>
 </html>
