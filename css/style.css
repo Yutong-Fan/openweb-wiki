@@ -124,9 +124,9 @@ body {
 }
 .skip-link:focus { inset-inline-start: 0; }
 
-/* 焦点指示：box-shadow 环跟随圆角，键盘聚焦时显示 */
+/* 焦点指示：仅键盘导航时由 JS 添加 kb-focus 类显示，点击不显示 */
 :focus { outline: none; }
-:focus-visible {
+.kb-focus {
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 4.5px var(--accent);
 }
 
@@ -394,7 +394,7 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
   border-color: var(--accent);
   box-shadow: var(--shadow-md);
 }
-.entry:focus-visible {
+.entry.kb-focus {
   transform: translateY(-3px);
   border-color: var(--accent);
   box-shadow: var(--shadow-md), 0 0 0 2px var(--surface), 0 0 0 4.5px var(--accent);

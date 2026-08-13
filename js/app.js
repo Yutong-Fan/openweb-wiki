@@ -404,7 +404,10 @@
     store.openId = null;
     const lastId = modal.dataset.lastId;
     if (lastId) {
-      const card = grid.querySelector('[data-id="' + CSS.escape(lastId) + '"]');
+      let card = null;
+      grid.querySelectorAll(".entry").forEach(function (c) {
+        if (c.dataset.id === lastId) card = c;
+      });
       if (card) card.focus();
     }
   });
@@ -474,6 +477,25 @@
   });
   window.addEventListener("unhandledrejection", function (e) {
     console.error("未处理的异步错误", e && e.reason);
+  });
+
+  /* 键盘导航检测：仅 Tab 键聚焦时显示焦点环，鼠标或触摸点击不显示 */
+  let usingKeyboard = false;
+  window.addEventListener("keydown", function (e) {
+    if (e.key === "Tab") usingKeyboard = true;
+  });
+  window.addEventListener("pointerdown", function () {
+    usingKeyboard = false;
+  });
+  document.addEventListener("focusin", function (e) {
+    if (usingKeyboard && e.target && e.target.classList) {
+      e.target.classList.add("kb-focus");
+    }
+  });
+  document.addEventListener("focusout", function (e) {
+    if (e.target && e.target.classList) {
+      e.target.classList.remove("kb-focus");
+    }
   });
 
   boot();
