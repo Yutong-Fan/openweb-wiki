@@ -1,6 +1,6 @@
 # openweb.wiki
 
-**Yutong Fan 的个人知识库** —— 项目、笔记、折腾记录，每条知识都有自己的地址。
+**个人知识库** —— 项目、笔记、折腾记录，每条知识都有自己的地址。
 
 - 在线站点：<https://openweb.wiki>
 - 源码仓库：<https://github.com/Yutong-Fan/openweb-wiki>
@@ -10,14 +10,14 @@
 
 ## 站主
 
-**Yutong Fan** · 个人知识库，条目开放共享。
+作者名称、简介、头像实时同步自 GitHub，站内不写死任何创作者信息。更换 GitHub 资料后，站点自动跟随。
 
 ## 架构
 
 - `index.html` —— 页面骨架与主题预加载
-- `css/style.css` —— 设计系统与动效（渐变主色、玻璃态、入场动画、响应式）
+- `css/style.css` —— 设计系统（档案纸墨配色、纯 CSS 入场动效、响应式）
 - `js/api.js` —— 数据层：GitHub API 同步 + 持久缓存 + 降级兜底
-- `js/app.js` —— 入口层：状态、路由、两阶段加载、滚动显现
+- `js/app.js` —— 入口层：状态、路由、两阶段加载
 - `js/render.js` —— 渲染层：卡片、模态、Markdown
 - `data/entries.json` —— 本地条目（唯一数据源）
 

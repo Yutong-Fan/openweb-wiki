@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="openweb.wiki — Yutong Fan 的个人知识库，收录项目、笔记和折腾记录。">
-<title>openweb.wiki · Yutong Fan 的知识库</title>
+<meta name="description" content="个人知识库，收录项目、笔记和折腾记录。">
+<title>openweb.wiki</title>
 <script>
   try {
     var t = localStorage.getItem("ow-theme");
@@ -27,7 +27,7 @@
     }, 20000);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="css/style.css?v=44">
+<link rel="stylesheet" href="css/style.css?v=46">
 </head>
 <body>
 <a class="skip-link" href="#index">跳到条目索引</a>
@@ -68,8 +68,8 @@
       <svg class="brand__logo" viewBox="0 0 32 32" aria-hidden="true">
         <defs>
           <linearGradient id="logo-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#0d9488"/>
-            <stop offset="1" stop-color="#06b6d4"/>
+            <stop offset="0" stop-color="#0f766e"/>
+            <stop offset="1" stop-color="#14b8a6"/>
           </linearGradient>
         </defs>
         <rect width="32" height="32" rx="9" fill="url(#logo-grad)"/>
@@ -77,7 +77,7 @@
         <ellipse cx="16" cy="16" rx="4" ry="8.5" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.92"/>
         <path d="M7.5 16h17" stroke="#ffffff" stroke-width="1.2" opacity="0.92"/>
       </svg>
-      <span class="brand__name">openweb.wiki</span>
+      <span class="brand__name">openweb<span class="brand__dot">.</span>wiki</span>
     </a>
 
     <label class="head__search">
@@ -95,9 +95,12 @@
 
 <main class="main" id="index">
   <div class="hero">
-    <span class="hero__eyebrow">个人知识库</span>
+    <div class="hero__byline">
+      <img class="hero__avatar" id="hero-avatar" alt="" hidden>
+      <span class="hero__eyebrow">个人知识库</span>
+    </div>
     <h1 class="hero__title" id="author-name">…</h1>
-    <p class="hero__sub" id="author-sub">项目、笔记、折腾记录 —— 每条知识都有自己的地址。</p>
+    <p class="hero__sub" id="author-sub">项目、笔记、折腾记录，每条知识都有自己的地址。</p>
   </div>
 
   <nav class="filters" id="filters" aria-label="分类筛选"></nav>
@@ -133,6 +136,6 @@
 
 <script src="js/api.js?v=44"></script>
 <script src="js/render.js?v=44"></script>
-<script src="js/app.js?v=46"></script>
+<script src="js/app.js?v=47"></script>
 </body>
 </html>

@@ -25,6 +25,7 @@
   const backTop = document.getElementById("back-top");
   const heroTitle = document.getElementById("author-name");
   const heroSub = document.getElementById("author-sub");
+  const heroAvatar = document.getElementById("hero-avatar");
   const footNote = document.getElementById("foot-note");
 
   const R = window.WikiRender;
@@ -72,16 +73,25 @@
     if (!localStorage.getItem(STORAGE_KEY)) syncThemeIcon();
   });
 
-  /* 作者信息渲染 */
+  /* 作者信息渲染：全部取自 GitHub API，无硬编码回退值 */
   function renderAuthor() {
-    const name = (store.author && store.author.name) || "Yutong Fan";
-    heroTitle.innerHTML =
-      '<span class="hero__accent">' + R.esc(name) + "</span> 的知识库";
+    const a = store.author;
+    const name = a && (a.name || a.login);
+    if (name) {
+      heroTitle.textContent = name + " 的知识库";
+    } else {
+      heroTitle.textContent = "知识库";
+    }
     heroSub.textContent =
-      (store.author && store.author.bio) ||
-      "项目、笔记、折腾记录 —— 每条知识都有自己的地址。";
-    footNote.textContent = name + " · 个人知识库，条目开放共享";
-    document.title = "openweb.wiki · " + name + " 的知识库";
+      (a && a.bio) || "项目、笔记、折腾记录，每条知识都有自己的地址。";
+    footNote.textContent =
+      (name ? name + " · " : "") + "个人知识库，条目开放共享";
+    document.title = "openweb.wiki" + (name ? " · " + name + " 的知识库" : "");
+    if (heroAvatar && a && a.avatar) {
+      heroAvatar.src = a.avatar;
+      heroAvatar.alt = name || "";
+      heroAvatar.hidden = false;
+    }
   }
 
   /* 列表渲染 */
@@ -109,7 +119,9 @@
   function render() {
     try {
       const list = visibleEntries();
-      R.grid(list, grid, { author: store.author ? store.author.name : "" });
+      R.grid(list, grid, {
+        author: store.author ? (store.author.name || store.author.login) : ""
+      });
       const parts = [];
       if (list.length) {
         parts.push(String(list.length).padStart(2, "0") + " 条条目");
@@ -137,46 +149,6 @@
     }
   }
 
-  /* 入场动画：视口内卡片立即播放，视口外卡片滚动进入时播放。
-     卡片本体始终可见，动画是渐进增强，另设兜底定时器防极端环境下动画卡住 */
-  const knownIds = new Set();
-  let revealObserver = null;
-  let revealFallbackTimer = null;
-
-  function revealNewCards() {
-    if (!revealObserver && "IntersectionObserver" in window) {
-      revealObserver = new IntersectionObserver(
-        function (entries) {
-          entries.forEach(function (entry) {
-            if (entry.isIntersecting) {
-              entry.target.classList.add("reveal");
-              revealObserver.unobserve(entry.target);
-            }
-          });
-        },
-        { threshold: 0.06, rootMargin: "0px 0px -30px 0px" }
-      );
-    }
-    const vh = window.innerHeight || document.documentElement.clientHeight;
-    grid.querySelectorAll(".entry").forEach(function (card) {
-      const id = card.dataset.id;
-      if (knownIds.has(id)) return;
-      knownIds.add(id);
-      const rect = card.getBoundingClientRect();
-      if (rect.top < vh && rect.bottom > 0) {
-        card.classList.add("reveal");
-      } else if (revealObserver) {
-        revealObserver.observe(card);
-      }
-    });
-    clearTimeout(revealFallbackTimer);
-    revealFallbackTimer = setTimeout(function () {
-      grid.querySelectorAll(".entry.reveal").forEach(function (card) {
-        card.classList.remove("reveal");
-      });
-    }, 3000);
-  }
-
   /* 两阶段加载 */
   function mergeSiteRepo(local, site) {
     const about = local.find(function (e) { return e.category === "关于"; });
@@ -200,7 +172,6 @@
       /* 单点失败不阻塞后续 */
     }
     render();
-    revealNewCards();
   }
 
   function renderSkeleton() {
@@ -263,7 +234,7 @@
       e,
       modalBody,
       store.entries,
-      { author: store.author ? store.author.name : "" },
+      { author: store.author ? (store.author.name || store.author.login) : "" },
       e.category === "关于" ? store.readmeHtml : ""
     );
     store.openId = e.id;
