@@ -9,22 +9,25 @@
   try {
     var t = localStorage.getItem("ow-theme");
     if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
-    /* 加载守卫：15 秒内无卡片渲染则自动重载（防旧缓存/挂起请求卡死） */
+    /* 加载守卫：20 秒内无卡片则重载一次（防旧缓存/挂起请求卡死）。
+       只重载一次，避免刷新反复打 GitHub API 加重配额消耗 */
     setTimeout(function () {
       if (!document.querySelector("#grid .entry")) {
         var n = (sessionStorage.getItem("ow-reload") | 0) + 1;
         sessionStorage.setItem("ow-reload", n);
-        if (n <= 2) {
+        if (n === 1) {
           location.reload();
         } else {
           var g = document.getElementById("grid");
-          if (g) g.innerHTML = '<div class="empty">加载失败，请检查网络后刷新</div>';
+          if (g && !g.querySelector(".empty")) {
+            g.innerHTML = '<div class="empty">加载失败，请检查网络后刷新</div>';
+          }
         }
       }
-    }, 15000);
+    }, 20000);
   } catch (e) {}
 </script>
-<link rel="stylesheet" href="css/style.css?v=36">
+<link rel="stylesheet" href="css/style.css?v=37">
 </head>
 <body>
 <a class="skip-link" href="#index">跳到条目索引</a>
@@ -119,9 +122,8 @@
   </div>
 </dialog>
 
-<script src="data/entries.js?v=35"></script>
-<script src="js/api.js?v=37"></script>
-<script src="js/render.js?v=40"></script>
-<script src="js/app.js?v=38"></script>
+<script src="js/api.js?v=41"></script>
+<script src="js/render.js?v=41"></script>
+<script src="js/app.js?v=42"></script>
 </body>
 </html>

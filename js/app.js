@@ -40,7 +40,8 @@
     query: "",
     openId: null,
     phase: "loading",      /* loading local syncing ready 或 error */
-    remoteFailed: false
+    remoteFailed: false,
+    rateLimited: false
   };
 
   /* 主题 */
@@ -78,12 +79,12 @@
 
   function renderAuthor() {
     const name = (store.author && store.author.name) || "Yutong Fan";
-    heroTitle.textContent = `${name} 的知识库`;
+    heroTitle.textContent = name + " 的知识库";
     heroSub.textContent =
       (store.author && store.author.bio) ||
       "项目、笔记、折腾记录 —— 每条知识都有自己的地址。";
-    footNote.textContent = `${name} · 个人知识库，条目开放共享`;
-    document.title = `openweb.wiki · ${name} 的知识库`;
+    footNote.textContent = name + " · 个人知识库，条目开放共享";
+    document.title = "openweb.wiki · " + name + " 的知识库";
   }
 
   /* 列表渲染 */
@@ -107,11 +108,15 @@
       const list = visibleEntries();
       R.grid(list, grid, { author: store.author ? store.author.name : "" });
       const parts = [];
-      if (list.length) parts.push(`${String(list.length).padStart(2, "0")} 条条目`);
-      if (store.query) parts.push(`关键词「${store.query}」`);
+      if (list.length) parts.push(String(list.length).padStart(2, "0") + " 条条目");
+      if (store.query) parts.push("关键词「" + store.query + "」");
       if (store.category !== "全部") parts.push(store.category);
       if (store.phase === "syncing") parts.push("正在同步 GitHub 数据…");
-      if (store.remoteFailed) parts.push("GitHub 数据加载失败，仅显示本地条目");
+      if (store.rateLimited) {
+        parts.push("GitHub API 配额已用尽，显示缓存数据（稍后自动恢复）");
+      } else if (store.remoteFailed) {
+        parts.push("GitHub 数据暂不可用，显示缓存数据");
+      }
       if (store.phase === "error") parts.push("加载失败，请刷新重试");
       status.textContent = parts.join(" · ");
       footUri.textContent = R.BRAND;
@@ -131,6 +136,12 @@
     }
   }
 
+  /* 本地条目与 API 项目合并，按 id 去重（本地优先） */
+  function mergeEntries(local, remote) {
+    const seen = new Set(local.map((e) => e.id));
+    return local.concat(remote.filter((p) => !seen.has(p.id)));
+  }
+
   function renderAll() {
     try {
       renderAuthor();
@@ -139,58 +150,46 @@
     render();
   }
 
-  /* 看门狗：任何阶段卡住都能继续（防止挂起的请求阻塞整站） */
-  function watchdog(ms, fallback) {
-    return new Promise((resolve) =>
-      setTimeout(() => resolve(fallback), ms)
-    );
-  }
-
   async function boot() {
     try { initTheme(); } catch (e) {}
 
-    /* 阶段 1：本地条目（script 注入，无网络依赖；fetch 兜底和看门狗） */
+    /* 阶段 1：本地条目（entries.json，秒开；无网络时用本地副本） */
     store.phase = "loading";
-    grid.innerHTML = `<div class="empty">正在加载…</div>`;
-    let local = [];
+    grid.innerHTML = '<div class="empty">正在加载…</div>';
+    let local = null;
     try {
-      local = await Promise.race([
-        WikiAPI.getEntries(),
-        watchdog(6000, [])
-      ]);
-      store.entries = local;
-      store.phase = "local";
-      renderAll();
+      local = await WikiAPI.getEntries();
     } catch (e) {
+      local = null;
+    }
+    if (!local) {
       store.phase = "error";
-      grid.innerHTML = `<div class="empty">本地数据加载失败<br>请刷新重试</div>`;
+      grid.innerHTML =
+        '<div class="empty">本地数据加载失败<br>请检查网络后刷新</div>';
+      render();
       return;
     }
+    store.entries = local;
+    store.phase = "local";
+    renderAll();
 
-    /* 阶段 2：GitHub 数据后补（任何失败降级为本地条目，不阻塞） */
+    /* 阶段 2：GitHub 数据后补（内部已做缓存兜底，永不抛错、永不空白）
+       ?force=1 可强制清缓存重新同步 */
     store.phase = "syncing";
     render();
-    let remote = null;
-    try {
-      remote = await Promise.race([
-        WikiAPI.getRemote(),
-        watchdog(12000, {
-          author: null, projects: [], site: null, readme: "", ok: false
-        })
-      ]);
-    } catch (e) {
-      remote = { author: null, projects: [], site: null, readme: "", ok: false };
-    }
+    const forceSync = /[?&]force=1/.test(location.search);
+    const remote = await WikiAPI.getRemote(forceSync);
     store.phase = "ready";
-    if (!remote.ok) {
-      store.remoteFailed = true;
-    } else {
+    store.rateLimited = !!remote.rateLimited;
+    if (remote.ok) {
       try {
         if (remote.author) store.author = remote.author;
         if (remote.site) mergeSiteRepo(local, remote.site);
         if (remote.readme) store.readmeHtml = R.mdToHtml(remote.readme);
-        store.entries = local.concat(remote.projects);
+        store.entries = mergeEntries(local, remote.projects);
       } catch (e) { /* 合并失败不阻塞 */ }
+    } else {
+      store.remoteFailed = true;
     }
     renderAll();
     routeFromHash();
@@ -225,7 +224,7 @@
   }
 
   /* 项目条目：按需拉取该仓库自己的 README，异步填入模态
-     - 会话级缓存避免重复请求（GitHub API 限流敏感）
+     - localStorage + ETag 缓存（WikiAPI 层），内存二次加速
      - openId / isConnected 守卫：模态已切换或关闭则不写入 */
 
   async function fillRepoReadme(repo, bodyEl) {
@@ -234,19 +233,17 @@
     box.className = "modal__readme";
     box.dataset.repo = repo;
     box.innerHTML =
-      `<h3 class="modal__sub">仓库 README</h3>` +
-      `<div class="modal__readme-body">加载中…</div>`;
+      '<h3 class="modal__sub">仓库 README</h3>' +
+      '<div class="modal__readme-body">加载中…</div>';
     bodyEl.appendChild(box);
     const body = box.querySelector(".modal__readme-body");
     let html = store.readmeCache[repo];
     if (!html) {
-      try {
-        const md = await WikiAPI.getRepoReadme(repo);
-        if (md) {
-          html = R.mdToHtml(md);
-          store.readmeCache[repo] = html;
-        }
-      } catch (e) { /* 拉取失败按无 README 处理 */ }
+      const md = await WikiAPI.getRepoReadme(repo);
+      if (md) {
+        html = R.mdToHtml(md);
+        store.readmeCache[repo] = html;
+      }
     }
     if (store.openId !== repo || !body.isConnected) return;
     body.innerHTML = html ? html : "<p>（该仓库无 README）</p>";
@@ -384,7 +381,7 @@
       history.replaceState(null, "", location.pathname + location.search);
     }
     store.openId = null;
-    const card = grid.querySelector(`[data-id="${modal.dataset.lastId}"]`);
+    const card = grid.querySelector('[data-id="' + modal.dataset.lastId + '"]');
     if (card) card.focus();
   });
 
@@ -442,7 +439,10 @@
   window.addEventListener("error", (e) => {
     const g = document.getElementById("grid");
     if (g && !g.querySelector(".entry")) {
-      g.innerHTML = `<div class="empty">页面发生错误：${R.esc(e.message || "未知错误")}<br>请刷新重试</div>`;
+      g.innerHTML =
+        '<div class="empty">页面发生错误：' +
+        R.esc(e.message || "未知错误") +
+        "<br>请刷新重试</div>";
     }
   });
 
