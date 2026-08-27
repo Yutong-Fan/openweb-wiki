@@ -1,80 +1,107 @@
 /* 数据层：GitHub API 与本地条目
-   GitHub API 未认证限额 60 次每小时每出口 IP，Cloudflare Pages 共享出口极易耗尽。
-   本层用三层策略守护配额并保证站点永不空白：
-   一 持久缓存 localStorage 加 TTL，缓存有效期内零网络请求
-   二 ETag 条件请求，数据未变返回 304，不消耗配额并自动续期
-   三 降级兜底，请求失败或限流时回退旧缓存，即使 GitHub 完全不可用也能浏览 */
+   策略：stale-while-revalidate — 每次加载都发请求（带 ETag），服务器返回 304 则零开销续期，
+   返回 200 则更新缓存。缓存仅用于：首次秒开、304 续期、网络失败兜底。
+   不再以 TTL 决定"要不要请求"，TTL 只表示"缓存新鲜度"供界面层参考。 */
 
 window.WikiAPI = (function () {
   "use strict";
 
-  const GH_USER = "Yutong-Fan";
-  const GH_API = "https://api.github.com";
-  const ENTRIES_URL = "data/entries.json";
-  const CACHE_PREFIX = "ow-cache:";
-  const TIMEOUT = 5000;
+  var GH_USER = "Yutong-Fan";
+  var GH_API = "https://api.github.com";
+  var ENTRIES_URL = "data/entries.json";
+  var CACHE_PREFIX = "ow-cache:";
+  var TIMEOUT = 5000;
 
-  const TTL = {
+  /* TTL 仅标记缓存新鲜度，不阻止请求 */
+  var TTL = {
     author: 86400000,
     repoList: 21600000,
     readme: 86400000,
     repoReadme: 86400000,
-    entries: 86400000
+    entries: 300000
   };
 
-  /* 配额耗尽标记，由 getRemote 汇总后透传给界面层 */
-  let rateFlag = false;
+  /* 过期超过此时长的缓存直接丢弃，不作为兜底 */
+  var MAX_AGE = 7 * 86400000;
+
+  var rateFlag = false;
+
+  /* ── 工具 ── */
 
   function fmtDate(iso) {
     if (!iso) return "";
-    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
-    const d = new Date(iso);
+    if (iso.length === 10 && iso.charAt(4) === "-" && iso.charAt(7) === "-") return iso;
+    var d = new Date(iso);
     if (isNaN(d.getTime())) return iso.slice(0, 10);
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return d.getFullYear() + "-" + m + "-" + day;
+    return d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
   }
 
-  /* 缓存箱结构为 { v: 值, exp: 过期时间戳, etag: 可选 } */
+  function normHomepage(raw) {
+    if (!raw) return { clean: "", href: "" };
+    var clean = raw.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    var href = /^https?:\/\//.test(raw) ? raw : "https://" + raw;
+    return { clean: clean, href: href };
+  }
+
+  function isEmpty(val) {
+    return val == null || val === "" ||
+      (Array.isArray(val) && val.length === 0) ||
+      (typeof val === "object" && !Array.isArray(val) && Object.keys(val).length === 0);
+  }
+
+  /* ── 缓存 ── */
 
   function cachePeek(key) {
     try {
-      const raw = localStorage.getItem(CACHE_PREFIX + key);
-      if (!raw) return null;
-      return JSON.parse(raw);
+      var raw = localStorage.getItem(CACHE_PREFIX + key);
+      return raw ? JSON.parse(raw) : null;
     } catch (e) {
       return null;
     }
   }
 
-  function cacheGet(key) {
-    const box = cachePeek(key);
+  function cacheFresh(key) {
+    var box = cachePeek(key);
     return box && box.exp > Date.now() ? box.v : null;
   }
 
+  function cacheStale(key) {
+    var box = cachePeek(key);
+    if (!box || box.v == null) return null;
+    if (box.exp + MAX_AGE < Date.now()) {
+      try { localStorage.removeItem(CACHE_PREFIX + key); } catch (e) {}
+      return null;
+    }
+    return box.v;
+  }
+
   function cacheSet(key, value, ttlMs, etag) {
+    if (isEmpty(value)) {
+      try { localStorage.removeItem(CACHE_PREFIX + key); } catch (e) {}
+      return;
+    }
     try {
       localStorage.setItem(
         CACHE_PREFIX + key,
         JSON.stringify({ v: value, exp: Date.now() + ttlMs, etag: etag || null })
       );
-    } catch (e) {
-      /* 隐私模式或存储配额满时静默跳过 */
-    }
-  }
-
-  function cacheTouch(key, ttlMs) {
-    const box = cachePeek(key);
-    if (!box) return;
-    box.exp = Date.now() + ttlMs;
-    try {
-      localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(box));
     } catch (e) {}
   }
 
+  function cacheTouch(key, ttlMs) {
+    var box = cachePeek(key);
+    if (!box) return;
+    box.exp = Date.now() + ttlMs;
+    try { localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(box)); } catch (e) {}
+  }
+
+  /* ── 网络 ── */
+
   async function fetchWithTimeout(url, options, ms) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), ms || TIMEOUT);
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, ms || TIMEOUT);
     try {
       return await fetch(url, Object.assign({}, options, { signal: ctrl.signal }));
     } finally {
@@ -82,221 +109,175 @@ window.WikiAPI = (function () {
     }
   }
 
-  /* 条件请求：缓存有 ETag 则带 If-None-Match，命中 304 续期并返回旧值。
-     200 时返回新值与新 ETag，由调用方缓存。403 且配额归零时抛错并标记限流 */
+  /* 条件请求：始终发请求，带 ETag 则 If-None-Match。
+     304 → 续期缓存并返回旧值；200 → 返回新值并缓存；其他 → 抛错 */
   async function fetchWithEtag(key, ttlMs, url, options, asText) {
-    const box = cachePeek(key);
-    const headers = Object.assign({}, options && options.headers);
+    var box = cachePeek(key);
+    var headers = Object.assign({}, options && options.headers);
     if (box && box.etag) headers["If-None-Match"] = box.etag;
-    const r = await fetchWithTimeout(url, Object.assign({}, options, { headers }));
+    var r = await fetchWithTimeout(url, Object.assign({}, options, { headers }));
+
     if (r.status === 304 && box) {
       cacheTouch(key, ttlMs);
-      return { value: box.v, stale: true, etag: box.etag };
+      return { value: box.v, etag: box.etag };
     }
     if (!r.ok) {
-      const err = new Error("HTTP " + r.status);
+      var err = new Error("HTTP " + r.status);
       err.status = r.status;
-      if (
-        r.status === 403 &&
-        String(r.headers.get("X-RateLimit-Remaining") || "").trim() === "0"
-      ) {
+      if (r.status === 403 &&
+          String(r.headers.get("X-RateLimit-Remaining") || "").trim() === "0") {
         err.rateLimited = true;
       }
       throw err;
     }
+    var val = asText ? await r.text() : await r.json();
+    var newEtag = r.headers.get("ETag") || null;
+    cacheSet(key, val, ttlMs, newEtag);
+    return { value: val, etag: newEtag };
+  }
+
+  /* 包装器：始终请求，失败时回退缓存。
+     缓存始终存原始 API 数据（raw），transform 只在返回给调用方时执行一次，
+     避免 304 返回已 transform 的数据被再次 transform 导致结构错误。 */
+  async function fetchOrStale(key, ttlMs, url, options, asText, transform) {
+    try {
+      var raw = await fetchWithEtag(key, ttlMs, url, options, asText);
+      var val = transform ? transform(raw.value) : raw.value;
+      return { value: val, fresh: true };
+    } catch (e) {
+      if (e && e.rateLimited) rateFlag = true;
+      var stale = cacheStale(key);
+      if (stale && transform) stale = transform(stale);
+      return { value: stale, fresh: false };
+    }
+  }
+
+  /* ── 仓库 → 条目映射 ── */
+
+  function mapRepo(repo) {
+    var hp = normHomepage(repo.homepage);
     return {
-      value: asText ? await r.text() : await r.json(),
-      stale: false,
-      etag: r.headers.get("ETag") || null
+      id: repo.name,
+      date: fmtDate(repo.pushed_at),
+      category: "项目",
+      tags: [repo.language, "github"].filter(Boolean),
+      title: repo.name,
+      summary: repo.description || "（无描述）",
+      body: (repo.description ? repo.description + "\n\n" : "") +
+        "语言：" + (repo.language || "—") +
+        " · 星标：" + repo.stargazers_count +
+        " · 最近更新：" + fmtDate(repo.pushed_at),
+      source: hp.clean || "github.com/" + GH_USER + "/" + repo.name,
+      url: repo.html_url,
+      homepage: hp.href,
+      stars: repo.stargazers_count || 0
     };
   }
 
-  /* force 只表示跳过 TTL 强制发请求，不删除旧缓存，
-     因此请求失败时仍能回退旧值，不会把数据弄丢 */
+  /* ── 数据接口 ── */
 
-  async function getAuthor(force) {
-    if (!force) {
-      const hit = cacheGet("author");
-      if (hit != null) return hit;
-    }
-    try {
-      const r = await fetchWithEtag("author", TTL.author, GH_API + "/users/" + GH_USER);
-      const u = {
-        name: r.value.name || r.value.login,
-        login: r.value.login,
-        bio: r.value.bio || "",
-        avatar: r.value.avatar_url || ""
+  async function getAuthor() {
+    return fetchOrStale("author", TTL.author, GH_API + "/users/" + GH_USER, null, false, function (raw) {
+      return {
+        name: raw.name || raw.login,
+        login: raw.login,
+        bio: raw.bio || "",
+        avatar: raw.avatar_url || ""
       };
-      cacheSet("author", u, TTL.author, r.etag);
-      return u;
-    } catch (e) {
-      if (e && e.rateLimited) rateFlag = true;
-      const stale = cachePeek("author");
-      return stale && stale.v != null ? stale.v : null;
-    }
+    });
   }
 
-  /* 仓库列表一次取回项目与本站仓库信息，省去独立请求 */
-  async function getRepoList(force) {
-    if (!force) {
-      const hit = cacheGet("repoList");
-      if (hit != null) return hit;
-    }
-    try {
-      const r = await fetchWithEtag(
-        "repoList",
-        TTL.repoList,
-        GH_API + "/users/" + GH_USER + "/repos?sort=pushed&per_page=100"
-      );
-      const repos = Array.isArray(r.value) ? r.value : [];
-      const siteRepo = repos.find(function (x) {
-        return x.name === "openweb-wiki";
-      }) || null;
-
-      const projects = repos
-        .filter(function (x) {
-          return !x.fork && !x.private && x.name !== "openweb-wiki";
-        })
-        .map(function (repo) {
-          const rawHome = repo.homepage || "";
-          const home = rawHome.replace(/^https?:\/\//, "").replace(/\/$/, "");
-          const homeHref = /^https?:\/\//.test(rawHome)
-            ? rawHome
-            : "https://" + rawHome;
-          return {
-            id: repo.name,
-            date: fmtDate(repo.pushed_at),
-            category: "项目",
-            tags: [repo.language, "github"].filter(Boolean),
-            title: repo.name,
-            summary: repo.description || "（无描述）",
-            body:
-              (repo.description ? repo.description + "\n\n" : "") +
-              "语言：" + (repo.language || "—") +
-              " · 星标：" + repo.stargazers_count +
-              " · 最近更新：" + fmtDate(repo.pushed_at),
-            source: home || "github.com/" + GH_USER + "/" + repo.name,
-            url: repo.html_url,
-            homepage: homeHref,
-            stars: repo.stargazers_count || 0
+  async function getRepoList() {
+    var res = await fetchOrStale(
+      "repoList", TTL.repoList,
+      GH_API + "/users/" + GH_USER + "/repos?sort=pushed&per_page=100",
+      null, false, function (repos) {
+        var list = Array.isArray(repos) ? repos : [];
+        var siteRepo = null;
+        var projects = [];
+        for (var i = 0; i < list.length; i++) {
+          if (list[i].name === "openweb-wiki") { siteRepo = list[i]; }
+          else if (!list[i].fork && !list[i].private) { projects.push(mapRepo(list[i])); }
+        }
+        var site = null;
+        if (siteRepo) {
+          var hp = normHomepage(siteRepo.homepage);
+          site = {
+            source: "github.com/" + siteRepo.full_name,
+            url: siteRepo.html_url,
+            homepage: hp.href
           };
-        });
-
-      const site = siteRepo
-        ? (function () {
-            const hp = siteRepo.homepage || "";
-            return {
-              source: "github.com/" + siteRepo.full_name,
-              url: siteRepo.html_url,
-              homepage: /^https?:\/\//.test(hp)
-                ? hp
-                : hp ? "https://" + hp : ""
-            };
-          })()
-        : null;
-
-      const data = { projects: projects, site: site };
-      cacheSet("repoList", data, TTL.repoList, r.etag);
-      return data;
-    } catch (e) {
-      if (e && e.rateLimited) rateFlag = true;
-      const stale = cachePeek("repoList");
-      return stale && stale.v != null ? stale.v : { projects: [], site: null };
-    }
+        }
+        return { projects: projects, site: site };
+      }
+    );
+    if (!res.value) res.value = { projects: [], site: null };
+    return res;
   }
 
-  async function getReadme(force) {
-    if (!force) {
-      const hit = cacheGet("readme");
-      if (hit != null) return hit;
-    }
-    try {
-      const r = await fetchWithEtag(
-        "readme",
-        TTL.readme,
-        GH_API + "/repos/" + GH_USER + "/openweb-wiki/readme",
-        { headers: { Accept: "application/vnd.github.raw+json" } },
-        true
-      );
-      cacheSet("readme", r.value, TTL.readme, r.etag);
-      return r.value;
-    } catch (e) {
-      if (e && e.rateLimited) rateFlag = true;
-      const stale = cachePeek("readme");
-      return stale && stale.v != null ? stale.v : "";
-    }
+  async function getReadme() {
+    var res = await fetchOrStale(
+      "readme", TTL.readme,
+      GH_API + "/repos/" + GH_USER + "/openweb-wiki/readme",
+      { headers: { Accept: "application/vnd.github.raw+json" } }, true
+    );
+    if (res.value == null) res.value = "";
+    return res;
   }
 
-  /* 项目 README 按需拉取，缓存键按仓库隔离 */
-  async function getRepoReadme(repoName, force) {
-    const key = "readme:" + repoName;
-    if (!force) {
-      const hit = cacheGet(key);
-      if (hit != null) return hit;
-    }
-    try {
-      const r = await fetchWithEtag(
-        key,
-        TTL.repoReadme,
-        GH_API + "/repos/" + GH_USER + "/" + encodeURIComponent(repoName) + "/readme",
-        { headers: { Accept: "application/vnd.github.raw+json" } },
-        true
-      );
-      cacheSet(key, r.value, TTL.repoReadme, r.etag);
-      return r.value;
-    } catch (e) {
-      if (e && e.rateLimited) rateFlag = true;
-      const stale = cachePeek(key);
-      return stale && stale.v != null ? stale.v : "";
-    }
+  async function getRepoReadme(repoName) {
+    var res = await fetchOrStale(
+      "readme:" + repoName, TTL.repoReadme,
+      GH_API + "/repos/" + GH_USER + "/" + encodeURIComponent(repoName) + "/readme",
+      { headers: { Accept: "application/vnd.github.raw+json" } }, true
+    );
+    if (res.value == null) res.value = "";
+    return res;
   }
 
-  /* 本地条目唯一数据源为 entries.json，网络失败时回退本地副本 */
+  /* 本地条目：始终 no-cache 请求，失败回退缓存 */
   async function getEntries() {
     try {
-      const r = await fetchWithTimeout(ENTRIES_URL, { cache: "no-cache" });
+      var r = await fetchWithTimeout(ENTRIES_URL, { cache: "no-cache" });
       if (!r.ok) throw new Error("HTTP " + r.status);
-      const data = await r.json();
-      const arr = Array.isArray(data) ? data : [];
+      var arr = await r.json();
+      if (!Array.isArray(arr)) arr = [];
       cacheSet("entries", arr, TTL.entries);
-      return arr;
+      return { value: arr, fresh: true };
     } catch (e) {
-      const stale = cachePeek("entries");
-      return stale && Array.isArray(stale.v) ? stale.v : null;
+      var stale = cacheStale("entries");
+      return { value: Array.isArray(stale) ? stale : null, fresh: false };
     }
   }
 
-  async function getRemote(force) {
+  /* 聚合：并行请求，任一成功即 fresh */
+  async function getRemote() {
     rateFlag = false;
-    let author = null;
-    let projects = [];
-    let site = null;
-    let readme = "";
-    await Promise.all([
-      getAuthor(force).then(function (a) { if (a) author = a; }),
-      getRepoList(force).then(function (d) {
-        if (d) { projects = d.projects || []; site = d.site || null; }
-      }),
-      getReadme(force).then(function (r) { if (r) readme = r; })
-    ]);
-    const ok = author != null || projects.length > 0 || site != null;
+    var results = await Promise.all([getAuthor(), getRepoList(), getReadme()]);
+    var authorRes = results[0], repoRes = results[1], readmeRes = results[2];
+    var author = authorRes.value;
+    var repoData = repoRes.value || { projects: [], site: null };
+    var projects = repoData.projects || [];
+    var site = repoData.site || null;
+    var readme = readmeRes.value || "";
+    var anyFresh = authorRes.fresh || repoRes.fresh || readmeRes.fresh;
+
     return {
       author: author,
       projects: projects,
       site: site,
       readme: readme,
-      ok: ok,
+      ok: author != null || projects.length > 0 || site != null,
+      fresh: anyFresh,
       rateLimited: rateFlag
     };
   }
 
   return {
-    getAuthor: getAuthor,
-    getRepoList: getRepoList,
-    getReadme: getReadme,
-    getRepoReadme: getRepoReadme,
     getEntries: getEntries,
     getRemote: getRemote,
+    getRepoReadme: getRepoReadme,
+    cacheFresh: cacheFresh,
     GH_USER: GH_USER,
     TTL: TTL
   };
