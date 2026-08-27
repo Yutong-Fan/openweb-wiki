@@ -5,31 +5,32 @@
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "ow-theme";
-  const rootEl = document.documentElement;
-  const sysDark = window.matchMedia("(prefers-color-scheme: dark)");
-  const supportsDialog = typeof HTMLDialogElement !== "undefined";
+  var STORAGE_KEY = "ow-theme";
+  var rootEl = document.documentElement;
+  var sysDark = window.matchMedia("(prefers-color-scheme: dark)");
+  var supportsDialog = typeof HTMLDialogElement !== "undefined";
 
-  const headEl = document.querySelector(".head");
-  const grid = document.getElementById("grid");
-  const status = document.getElementById("status");
-  const filtersEl = document.getElementById("filters");
-  const searchInput = document.getElementById("search");
-  const modal = document.getElementById("modal");
-  const modalBody = document.getElementById("modal-body");
-  const modalClose = document.getElementById("modal-close");
-  const modalSearch = document.getElementById("modal-search");
-  const modalResults = document.getElementById("modal-search-results");
-  const footUri = document.getElementById("foot-uri");
-  const themeToggle = document.getElementById("theme-toggle");
-  const backTop = document.getElementById("back-top");
-  const heroTitle = document.getElementById("author-name");
-  const heroSub = document.getElementById("author-sub");
-  const footNote = document.getElementById("foot-note");
+  /* DOM 引用一次缓存 */
+  var headEl = document.querySelector(".head");
+  var grid = document.getElementById("grid");
+  var statusEl = document.getElementById("status");
+  var filtersEl = document.getElementById("filters");
+  var searchInput = document.getElementById("search");
+  var modal = document.getElementById("modal");
+  var modalBody = document.getElementById("modal-body");
+  var modalClose = document.getElementById("modal-close");
+  var modalSearch = document.getElementById("modal-search");
+  var modalResults = document.getElementById("modal-search-results");
+  var footUri = document.getElementById("foot-uri");
+  var themeToggle = document.getElementById("theme-toggle");
+  var backTop = document.getElementById("back-top");
+  var heroTitle = document.getElementById("author-name");
+  var heroSub = document.getElementById("author-sub");
+  var footNote = document.getElementById("foot-note");
 
-  const R = window.WikiRender;
+  var R = window.WikiRender;
 
-  const store = {
+  var store = {
     entries: [],
     author: null,
     readmeHtml: "",
@@ -39,12 +40,17 @@
     openId: null,
     phase: "loading",
     remoteFailed: false,
-    rateLimited: false
+    remoteCached: false,
+    rateLimited: false,
+    /* 视图缓存：entries/query/category 变化时置脏，render 时重建 */
+    _dirty: true,
+    _visible: null
   };
 
-  /* 主题 */
+  /* ── 主题 ── */
+
   function currentTheme() {
-    const t = rootEl.dataset.theme;
+    var t = rootEl.dataset.theme;
     if (t === "dark" || t === "light") return t;
     return sysDark.matches ? "dark" : "light";
   }
@@ -57,7 +63,7 @@
   }
 
   function initTheme() {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    var saved = localStorage.getItem(STORAGE_KEY);
     if (saved === "dark" || saved === "light") rootEl.dataset.theme = saved;
     syncThemeIcon();
   }
@@ -72,107 +78,123 @@
     if (!localStorage.getItem(STORAGE_KEY)) syncThemeIcon();
   });
 
-  /* 作者信息渲染：全部取自 GitHub API，无硬编码回退值 */
+  /* ── 搜索文本预构建 ── */
+
+  function buildSearchText(e) {
+    var parts = [e.id, e.title, e.summary, e.category];
+    if (e.tags) parts.push.apply(parts, e.tags);
+    return parts.join(" ").toLowerCase();
+  }
+
+  function markDirty() { store._dirty = true; }
+
+  /* ── 作者信息渲染 ── */
+
   function renderAuthor() {
-    const a = store.author;
-    const name = a && (a.name || a.login);
-    if (name) {
-      heroTitle.textContent = name + " 的知识库";
-    } else {
-      heroTitle.textContent = "知识库";
-    }
-    heroSub.textContent =
-      (a && a.bio) || "项目、笔记、折腾记录，每条知识都有自己的地址。";
-    footNote.textContent =
-      (name ? name + " · " : "") + "个人知识库，条目开放共享";
+    var a = store.author;
+    var name = a && (a.name || a.login);
+    heroTitle.textContent = name ? name + " 的知识库" : "知识库";
+    heroSub.textContent = (a && a.bio) || "项目、笔记、折腾记录，每条知识都有自己的地址。";
+    footNote.textContent = (name ? name + " · " : "") + "个人知识库，条目开放共享";
     document.title = "openweb.wiki" + (name ? " · " + name + " 的知识库" : "");
   }
 
-  /* 列表渲染 */
+  /* ── 列表渲染（带视图缓存） ── */
+
   function visibleEntries() {
-    const q = store.query.trim().toLowerCase();
-    return store.entries
-      .filter(function (e) {
-        return store.category === "全部" || e.category === store.category;
-      })
-      .filter(function (e) {
-        if (!q) return true;
-        return [e.id, e.title, e.summary, e.body, e.category]
-          .concat(e.tags || [])
-          .join(" ")
-          .toLowerCase()
-          .includes(q);
-      })
-      .sort(function (a, b) {
-        if (a.date < b.date) return 1;
-        if (a.date > b.date) return -1;
-        return 0;
-      });
+    if (!store._dirty && store._visible) return store._visible;
+
+    var q = store.query.trim().toLowerCase();
+    var cat = store.category;
+    var entries = store.entries;
+    var result = [];
+
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (cat !== "全部" && e.category !== cat) continue;
+      if (q && (e._searchText || buildSearchText(e)).indexOf(q) === -1) continue;
+      result.push(e);
+    }
+
+    result.sort(function (a, b) {
+      return a.date < b.date ? 1 : a.date > b.date ? -1 : 0;
+    });
+
+    store._visible = result;
+    store._dirty = false;
+    return result;
   }
 
   function render() {
     try {
-      const list = visibleEntries();
-      R.grid(list, grid, {
-        author: store.author ? (store.author.name || store.author.login) : ""
-      });
-      const parts = [];
-      if (list.length) {
-        parts.push(String(list.length).padStart(2, "0") + " 条条目");
-      }
+      var list = visibleEntries();
+      var authorName = store.author ? (store.author.name || store.author.login) : "";
+      R.grid(list, grid, { author: authorName });
+
+      var parts = [];
+      if (list.length) parts.push(String(list.length).padStart(2, "0") + " 条条目");
       if (store.query) parts.push("关键词「" + store.query + "」");
       if (store.category !== "全部") parts.push(store.category);
       if (store.phase === "syncing") parts.push("正在同步 GitHub 数据…");
       if (store.rateLimited) {
-        parts.push("GitHub API 配额已用尽，显示缓存数据");
+        parts.push("GitHub API 配额已用尽，数据来自缓存");
       } else if (store.remoteFailed) {
-        parts.push("GitHub 数据暂不可用，显示缓存数据");
+        parts.push("GitHub 数据暂不可用，数据来自缓存");
+      } else if (store.remoteCached) {
+        parts.push("使用缓存数据（网络验证中…）");
       }
       if (store.phase === "error") parts.push("加载失败，请刷新重试");
 
-      let dotClass = "";
+      var dotClass = "";
       if (store.phase === "syncing") dotClass = " is-syncing";
-      else if (store.remoteFailed || store.rateLimited || store.phase === "error") {
-        dotClass = " is-warn";
-      }
-      status.innerHTML =
+      else if (store.remoteFailed || store.rateLimited || store.phase === "error") dotClass = " is-warn";
+
+      statusEl.innerHTML =
         '<span class="status-dot' + dotClass + '"></span>' + parts.join(" · ");
       footUri.textContent = R.BRAND;
     } catch (e) {
-      status.textContent = "渲染异常，请刷新重试";
+      statusEl.textContent = "渲染异常，请刷新重试";
     }
   }
 
-  /* 两阶段加载 */
+  /* ── 数据合并 ── */
+
   function mergeSiteRepo(local, site) {
-    const about = local.find(function (e) { return e.category === "关于"; });
-    if (about && site) {
-      about.source = site.source;
-      about.url = site.url;
-      about.homepage = site.homepage;
+    for (var i = 0; i < local.length; i++) {
+      if (local[i].category === "关于") {
+        local[i].source = site.source;
+        local[i].url = site.url;
+        local[i].homepage = site.homepage;
+        return;
+      }
     }
   }
 
   function mergeEntries(local, remote) {
-    const seen = new Set(local.map(function (e) { return e.id; }));
-    return local.concat(remote.filter(function (p) { return !seen.has(p.id); }));
+    var seen = Object.create(null);
+    for (var i = 0; i < local.length; i++) seen[local[i].id] = true;
+    var merged = local.slice();
+    for (var j = 0; j < remote.length; j++) {
+      if (!seen[remote[j].id]) merged.push(remote[j]);
+    }
+    return merged;
   }
 
   function renderAll() {
     try {
       renderAuthor();
       filtersEl.innerHTML = R.filters(store.entries, store.category);
-    } catch (e) {
-      /* 单点失败不阻塞后续 */
-    }
+    } catch (e) {}
     render();
   }
 
   function renderSkeleton() {
-    let html = "";
-    for (let i = 0; i < 6; i++) html += '<div class="skeleton"></div>';
+    var html = "";
+    for (var i = 0; i < 6; i++) html += '<div class="skeleton"></div>';
     grid.innerHTML = html;
   }
+
+  /* ── 启动 ── */
 
   async function boot() {
     try { initTheme(); } catch (e) {}
@@ -180,12 +202,9 @@
     store.phase = "loading";
     renderSkeleton();
 
-    let local = null;
-    try {
-      local = await WikiAPI.getEntries();
-    } catch (e) {
-      local = null;
-    }
+    /* 阶段一：本地条目，始终请求（no-cache），失败回退缓存 */
+    var localRes = await WikiAPI.getEntries();
+    var local = localRes.value;
     if (!local) {
       store.phase = "error";
       grid.innerHTML =
@@ -193,41 +212,57 @@
       render();
       return;
     }
+
+    /* 预构建搜索索引 */
+    for (var i = 0; i < local.length; i++) local[i]._searchText = buildSearchText(local[i]);
     store.entries = local;
+    markDirty();
     store.phase = "local";
     renderAll();
 
-    /* 阶段二：GitHub 数据后补，内部已做缓存兜底，永不抛错 */
+    /* 阶段二：GitHub 数据，始终发请求（ETag 条件），缓存仅作兜底 */
     store.phase = "syncing";
     render();
-    const forceSync = /[?&]force=1/.test(location.search);
-    const remote = await WikiAPI.getRemote(forceSync);
+
+    var remote = await WikiAPI.getRemote();
     store.phase = "ready";
     store.rateLimited = !!remote.rateLimited;
+    store.remoteCached = !remote.fresh;
+
     if (remote.ok) {
       try {
         if (remote.author) store.author = remote.author;
         if (remote.site) mergeSiteRepo(local, remote.site);
         if (remote.readme) store.readmeHtml = R.mdToHtml(remote.readme);
-        store.entries = mergeEntries(local, remote.projects);
-      } catch (e) {
-        /* 合并失败不阻塞 */
-      }
+        if (remote.projects.length) {
+          /* 预构建远程条目的搜索索引 */
+          for (var j = 0; j < remote.projects.length; j++) {
+            remote.projects[j]._searchText = buildSearchText(remote.projects[j]);
+          }
+          store.entries = mergeEntries(local, remote.projects);
+          markDirty();
+        }
+      } catch (e) {}
     } else {
       store.remoteFailed = true;
     }
+
     renderAll();
     routeFromHash();
   }
 
-  /* 模态 */
+  /* ── 模态 ── */
+
   function openEntry(id) {
-    const e = store.entries.find(function (x) { return x.id === id; });
+    var e = null;
+    var entries = store.entries;
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].id === id) { e = entries[i]; break; }
+    }
     if (!e) return;
+
     R.modal(
-      e,
-      modalBody,
-      store.entries,
+      e, modalBody, entries,
       { author: store.author ? (store.author.name || store.author.login) : "" },
       e.category === "关于" ? store.readmeHtml : ""
     );
@@ -235,39 +270,37 @@
     modal.dataset.lastId = e.id;
     modalSearch.value = "";
     modalResults.classList.remove("is-open");
-    if (supportsDialog) {
-      modal.showModal();
-    } else {
-      modal.classList.add("is-fallback");
-      modal.removeAttribute("hidden");
-    }
+
+    if (supportsDialog) { modal.showModal(); }
+    else { modal.classList.add("is-fallback"); modal.removeAttribute("hidden"); }
+
     if (e.category === "项目") fillRepoReadme(e.id, modalBody);
     if (location.hash !== R.hashOf(e.id)) {
       history.pushState(null, "", R.hashOf(e.id));
     }
   }
 
-  /* 项目条目按需拉取仓库 README，异步填入模态，带守卫防止串台 */
   async function fillRepoReadme(repo, bodyEl) {
     if (!repo || bodyEl.querySelector(".modal__readme[data-repo]")) return;
-    const box = document.createElement("div");
+    var box = document.createElement("div");
     box.className = "modal__readme";
     box.dataset.repo = repo;
     box.innerHTML =
       '<h3 class="modal__sub">仓库 README</h3>' +
       '<div class="modal__readme-body">加载中…</div>';
     bodyEl.appendChild(box);
-    const body = box.querySelector(".modal__readme-body");
-    let html = store.readmeCache[repo];
+    var body = box.querySelector(".modal__readme-body");
+
+    var html = store.readmeCache[repo];
     if (!html) {
-      const md = await WikiAPI.getRepoReadme(repo);
-      if (md) {
-        html = R.mdToHtml(md);
+      var res = await WikiAPI.getRepoReadme(repo);
+      if (res.value) {
+        html = R.mdToHtml(res.value);
         store.readmeCache[repo] = html;
       }
     }
     if (store.openId !== repo || !body.isConnected) return;
-    body.innerHTML = html ? html : "<p>（该仓库无 README）</p>";
+    body.innerHTML = html || "<p>（该仓库无 README）</p>";
   }
 
   function closeModal() {
@@ -282,12 +315,16 @@
     store.openId = null;
   }
 
-  /* hash 路由 */
+  /* ── Hash 路由 ── */
+
   function routeFromHash() {
-    const m = location.hash.match(/^#\/?entries\/(.+)$/i);
+    var m = location.hash.match(/^#\/?entries\/(.+)$/i);
     if (m) {
-      const id = decodeURIComponent(m[1]);
-      if (store.entries.some(function (e) { return e.id === id; })) openEntry(id);
+      var id = decodeURIComponent(m[1]);
+      var entries = store.entries;
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].id === id) { openEntry(id); return; }
+      }
     }
   }
 
@@ -296,28 +333,28 @@
     else routeFromHash();
   });
 
-  /* 模态搜索 */
+  /* ── 模态内搜索 ── */
+
+  var modalDebounce;
+  function scheduleModalSearch() {
+    clearTimeout(modalDebounce);
+    modalDebounce = setTimeout(function () { renderModalResults(modalSearch.value); }, 100);
+  }
+
   function renderModalResults(q) {
-    const qq = q.trim().toLowerCase();
-    if (!qq) {
-      modalResults.classList.remove("is-open");
-      return;
+    var qq = q.trim().toLowerCase();
+    if (!qq) { modalResults.classList.remove("is-open"); return; }
+
+    var hits = [];
+    var entries = store.entries;
+    for (var i = 0; i < entries.length && hits.length < 8; i++) {
+      var e = entries[i];
+      if ((e._searchText || buildSearchText(e)).indexOf(qq) !== -1) hits.push(e);
     }
-    const hits = store.entries
-      .filter(function (e) {
-        return [e.id, e.title, e.summary]
-          .concat(e.tags || [])
-          .join(" ")
-          .toLowerCase()
-          .includes(qq);
-      })
-      .slice(0, 8);
     R.searchResults(hits, modalResults);
   }
 
-  modalSearch.addEventListener("input", function () {
-    renderModalResults(modalSearch.value);
-  });
+  modalSearch.addEventListener("input", scheduleModalSearch);
   modalSearch.addEventListener("focus", function () {
     if (modalSearch.value) renderModalResults(modalSearch.value);
   });
@@ -325,15 +362,15 @@
     setTimeout(function () { modalResults.classList.remove("is-open"); }, 150);
   });
 
-  /* 全局事件委托 */
+  /* ── 全局事件委托 ── */
+
   document.addEventListener("click", function (ev) {
-    const jump = ev.target.closest("[data-jump]");
-    if (jump) {
-      ev.stopPropagation();
-      openEntry(jump.dataset.jump);
-      return;
-    }
-    const copyBtn = ev.target.closest("[data-copy]");
+    var target = ev.target;
+
+    var jump = target.closest("[data-jump]");
+    if (jump) { ev.stopPropagation(); openEntry(jump.dataset.jump); return; }
+
+    var copyBtn = target.closest("[data-copy]");
     if (copyBtn) {
       ev.stopPropagation();
       copyText(copyBtn.dataset.copy)
@@ -341,57 +378,59 @@
         .catch(function () { showToast("复制失败 · 可长按地址手动复制"); });
       return;
     }
-    const tagBtn = ev.target.closest("[data-tag]");
+
+    var tagBtn = target.closest("[data-tag]");
     if (tagBtn) {
       ev.stopPropagation();
-      searchInput.value = tagBtn.dataset.tag;
-      store.query = tagBtn.dataset.tag;
+      var tag = tagBtn.dataset.tag;
+      searchInput.value = tag;
+      store.query = tag;
       store.category = "全部";
+      markDirty();
       filtersEl.querySelectorAll(".chip").forEach(function (c) {
         c.classList.toggle("is-active", c.dataset.filter === "全部");
       });
       render();
       return;
     }
-    const wiki = ev.target.closest("[data-wiki]");
-    if (wiki) {
-      ev.preventDefault();
-      openEntry(wiki.dataset.wiki);
-      return;
-    }
-    if (ev.target.closest("a")) return;
-    const card = ev.target.closest(".entry");
+
+    var wiki = target.closest("[data-wiki]");
+    if (wiki) { ev.preventDefault(); openEntry(wiki.dataset.wiki); return; }
+
+    if (target.closest("a")) return;
+    var card = target.closest(".entry");
     if (card) openEntry(card.dataset.id);
   });
 
   grid.addEventListener("keydown", function (ev) {
     if (ev.key === "Enter" || ev.key === " ") {
-      const card = ev.target.closest(".entry");
-      if (card) {
-        ev.preventDefault();
-        openEntry(card.dataset.id);
-      }
+      var card = ev.target.closest(".entry");
+      if (card) { ev.preventDefault(); openEntry(card.dataset.id); }
     }
   });
 
   filtersEl.addEventListener("click", function (ev) {
-    const chip = ev.target.closest(".chip");
+    var chip = ev.target.closest(".chip");
     if (!chip) return;
     store.category = chip.dataset.filter;
+    markDirty();
     filtersEl.querySelectorAll(".chip").forEach(function (c) {
       c.classList.toggle("is-active", c === chip);
     });
     render();
   });
 
-  let debounce;
+  var searchDebounce;
   searchInput.addEventListener("input", function () {
-    clearTimeout(debounce);
-    debounce = setTimeout(function () {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(function () {
       store.query = searchInput.value;
+      markDirty();
       render();
     }, 120);
   });
+
+  /* ── 模态事件 ── */
 
   modalClose.addEventListener("click", closeModal);
   modal.addEventListener("click", function (ev) {
@@ -402,56 +441,52 @@
       history.replaceState(null, "", location.pathname + location.search);
     }
     store.openId = null;
-    const lastId = modal.dataset.lastId;
+    var lastId = modal.dataset.lastId;
     if (lastId) {
-      let card = null;
-      grid.querySelectorAll(".entry").forEach(function (c) {
-        if (c.dataset.id === lastId) card = c;
-      });
-      if (card) card.focus();
+      var cards = grid.querySelectorAll(".entry");
+      for (var i = 0; i < cards.length; i++) {
+        if (cards[i].dataset.id === lastId) { cards[i].focus(); break; }
+      }
     }
   });
 
-  const onScroll = function () {
-    const y = window.scrollY;
+  /* ── 滚动 ── */
+
+  var onScroll = function () {
+    var y = window.scrollY;
     backTop.classList.toggle("is-visible", y > 600);
     if (headEl) headEl.classList.toggle("is-scrolled", y > 8);
   };
   window.addEventListener("scroll", onScroll, { passive: true });
   onScroll();
+
   backTop.addEventListener("click", function () {
-    const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.scrollTo({ top: 0, behavior: smooth ? "smooth" : "auto" });
   });
 
-  /* 复制与 Toast */
+  /* ── 复制与 Toast ── */
+
   function copyText(text) {
-    const fallback = function () {
-      return new Promise(function (resolve, reject) {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.setAttribute("readonly", "");
-        ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        try {
-          if (document.execCommand("copy")) resolve();
-          else reject(new Error("copy failed"));
-        } catch (e) {
-          reject(e);
-        }
-        ta.remove();
-      });
-    };
     if (navigator.clipboard && window.isSecureContext) {
-      return navigator.clipboard.writeText(text).catch(fallback);
+      return navigator.clipboard.writeText(text);
     }
-    return fallback();
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand("copy") ? resolve() : reject(new Error("copy failed"));
+      } catch (e) { reject(e); }
+      ta.remove();
+    });
   }
 
-  let toastTimer;
-  let toastEl = null;
+  var toastTimer, toastEl;
   function showToast(msg) {
     if (!toastEl) {
       toastEl = document.createElement("div");
@@ -465,37 +500,33 @@
     toastTimer = setTimeout(function () { toastEl.classList.remove("is-visible"); }, 1800);
   }
 
-  /* 全局兜底：未捕获异常不白屏 */
+  /* ── 全局兜底 ── */
+
   window.addEventListener("error", function (e) {
-    const g = document.getElementById("grid");
+    var g = document.getElementById("grid");
     if (g && !g.querySelector(".entry") && !g.querySelector(".skeleton")) {
       g.innerHTML =
         '<div class="empty"><div class="empty__icon">!</div>页面发生错误：' +
-        R.esc(e.message || "未知错误") +
-        "<br>请刷新重试</div>";
+        R.esc(e.message || "未知错误") + "<br>请刷新重试</div>";
     }
   });
+
   window.addEventListener("unhandledrejection", function (e) {
     console.error("未处理的异步错误", e && e.reason);
   });
 
-  /* 键盘导航检测：仅 Tab 键聚焦时显示焦点环，鼠标或触摸点击不显示 */
-  let usingKeyboard = false;
+  /* ── 键盘导航 ── */
+
+  var usingKeyboard = false;
   window.addEventListener("keydown", function (e) {
     if (e.key === "Tab") usingKeyboard = true;
   });
-  window.addEventListener("pointerdown", function () {
-    usingKeyboard = false;
-  });
+  window.addEventListener("pointerdown", function () { usingKeyboard = false; });
   document.addEventListener("focusin", function (e) {
-    if (usingKeyboard && e.target && e.target.classList) {
-      e.target.classList.add("kb-focus");
-    }
+    if (usingKeyboard && e.target && e.target.classList) e.target.classList.add("kb-focus");
   });
   document.addEventListener("focusout", function (e) {
-    if (e.target && e.target.classList) {
-      e.target.classList.remove("kb-focus");
-    }
+    if (e.target && e.target.classList) e.target.classList.remove("kb-focus");
   });
 
   boot();
